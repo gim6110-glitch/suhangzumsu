@@ -1,6 +1,11 @@
 /* Evaluation-plan importer v2. In-browser extraction; human verification required. */
 "use strict";
-const sgPlan={candidates:[],sourceFile:"",pages:0,scanned:0,rejected:0,running:false,lastDept:"",lastSubject:""};
+const sgPlan={candidates:[],sourceFile:"",pages:0,scanned:0,rejected:0,running:false,lastDept:"",lastSubject:"",pdfDoc:null,ocrWorker:null};
+function sgPlanWordsFromTSV(tsv,scale,pageHeight){return sgTSVPlan(tsv).map(a=>({text:a.text,x:a.left/scale,y:a.top/scale+2,width:a.width/scale,height:a.h/scale})).sort((a,b)=>a.y-b.y||a.x-b.x)}
+function sgTSVPlan(tsv){return String(tsv||"").split(/\r?\n/).slice(1).map(x=>x.split("\t")).filter(a=>a.length>=12&&a[0]==="5"&&a[11].trim()).map(a=>({text:a.slice(11).join("\t").trim(),left:Number(a[6]),top:Number(a[7]),width:Number(a[8]),h:Number(a[9]),conf:Number(a[10])})).filter(x=>x.conf>20)}
+async function sgPlanOCR(page){if(!window.Tesseract)throw Error("스캔형 평가계획을 읽으려면 OCR 라이브러리가 필요합니다.");if(!sgPlan.ocrWorker){sgPlan.ocrWorker=await Tesseract.createWorker(["kor","eng"],1);await sgPlan.ocrWorker.setParameters({tessedit_pageseg_mode:Tesseract.PSM.AUTO})}
+ const scale=2.15;const canvas=await pdfPageCanvas(page,scale);const {data}=await sgPlan.ocrWorker.recognize(canvas,{}, {tsv:true});return {words:sgPlanWordsFromTSV(data.tsv,scale,canvas.height/scale),text:data.text||""}
+}
 function sgPlanWords(page,textContent){
  const height=page.view[3]||page.getViewport({scale:1}).height;
  return textContent.items.filter(x=>typeof x.str==="string"&&x.str.trim()&&x.transform).map(item=>({text:item.str.trim(),x:item.transform[4],y:height-item.transform[5],width:item.width||0,height:item.height||0})).sort((a,b)=>a.y-b.y||a.x-b.x)
@@ -45,8 +50,9 @@ function sgPlanPanel(){let node=$("sg-plan-panel");if(node)return node;node=docu
 function sgRenderCandidates(){const panel=sgPlanPanel();const all=sgPlan.candidates;const good=all.filter(x=>x.matched).length;panel.querySelector("#sg-plan-summary").textContent="문서 "+sgPlan.pages+"쪽 · 텍스트 스캔 "+sgPlan.scanned+"쪽 · 추출 영역 "+all.length+"개 · 만점·기본점수 합산 일치 "+good+"개 · 승인 "+all.filter(x=>x.reviewed).length+"개";
  panel.querySelector("#sg-candidate-list").innerHTML=all.length?all.slice(0,500).map(sgCandidateCard).join(""):'<div class="empty">자동 추출 영역이 없습니다. 원문을 확인하여 기준을 수동 등록하세요.</div>';
 }
-function sgEditCandidate(i){const c=sgPlan.candidates[i];if(!c)return;const box=$("sg-edit-box");box.className="details";box.innerHTML='<h3>PDF '+c.source_page+'쪽 · 수행평가 영역 기준 확인</h3><p class="muted">원본 PDF를 따로 펼쳐 실제 영역명과 단계별 점수가 맞는지 대조하세요. 수정 시 가능한 총점을 다시 계산합니다.</p><div class="filter-row"><label>학과<input id="sgp-dept" value="'+escaped(c.department)+'"></label><label>과목<input id="sgp-subject" value="'+escaped(c.subject)+'"></label><label>능력단위<input id="sgp-unit" value="'+escaped(c.unit||"")+'"></label></div><div class="filter-row"><label>수행평가 영역<input id="sgp-area" value="'+escaped(c.area)+'"></label><label>만점<input id="sgp-max" type="number" min="1" value="'+c.max+'"></label><label>기본점수<input id="sgp-base" type="number" min="0" value="'+c.base+'"></label></div><label class="muted">항목별 배점 (한 줄당 한 개 항목, 쉼표로 단계별 점수 구분)</label><textarea id="sgp-items" rows="6" style="width:100%;padding:11px;border:1px solid #dbe5ef;border-radius:9px;display:block;margin:9px 0 14px">'+escaped(c.items.map(x=>x.choices.join(", ")).join("\n"))+'</textarea><label class="muted">또는 총점 환산형: 가능한 전체 점수 입력 (항목 배점이 없을 때)</label><textarea id="sgp-direct" rows="2" style="width:100%;padding:11px;border:1px solid #dbe5ef;border-radius:9px;display:block;margin:9px 0 14px" placeholder="예: 30, 40, 50, 60, 70, 80, 90, 100"></textarea><div class="actions"><button class="btn primary" id="sgp-approve">원문 대조 완료 · 기준 승인</button><button class="btn secondary" id="sgp-dismiss">닫기</button></div><p class="helper" id="sgp-message"></p>';
+function sgEditCandidate(i){const c=sgPlan.candidates[i];if(!c)return;const box=$("sg-edit-box");box.className="details";box.innerHTML='<h3>PDF '+c.source_page+'쪽 · 수행평가 영역 기준 확인</h3><p class="muted">원본 PDF를 따로 펼쳐 실제 영역명과 단계별 점수가 맞는지 대조하세요. 수정 시 가능한 총점을 다시 계산합니다.</p><div class="filter-row"><label>학과<input id="sgp-dept" value="'+escaped(c.department)+'"></label><label>과목<input id="sgp-subject" value="'+escaped(c.subject)+'"></label><label>능력단위<input id="sgp-unit" value="'+escaped(c.unit||"")+'"></label></div><div class="filter-row"><label>수행평가 영역<input id="sgp-area" value="'+escaped(c.area)+'"></label><label>만점<input id="sgp-max" type="number" min="1" value="'+c.max+'"></label><label>기본점수<input id="sgp-base" type="number" min="0" value="'+c.base+'"></label></div><label class="muted">항목별 배점 (한 줄당 한 개 항목, 쉼표로 단계별 점수 구분)</label><textarea id="sgp-items" rows="6" style="width:100%;padding:11px;border:1px solid #dbe5ef;border-radius:9px;display:block;margin:9px 0 14px">'+escaped(c.items.map(x=>x.choices.join(", ")).join("\n"))+'</textarea><label class="muted">또는 총점 환산형: 가능한 전체 점수 입력 (항목 배점이 없을 때)</label><textarea id="sgp-direct" rows="2" style="width:100%;padding:11px;border:1px solid #dbe5ef;border-radius:9px;display:block;margin:9px 0 14px" placeholder="예: 30, 40, 50, 60, 70, 80, 90, 100"></textarea><div class="actions"><button class="btn secondary" id="sgp-preview">원본 PDF 해당 쪽 미리보기</button><button class="btn primary" id="sgp-approve">원문 대조 완료 · 기준 승인</button><button class="btn secondary" id="sgp-dismiss">닫기</button></div><p class="helper" id="sgp-message"></p>';
  box.querySelector("#sgp-dismiss").onclick=()=>box.replaceChildren();
+ box.querySelector("#sgp-preview").onclick=async()=>{if(!sgPlan.pdfDoc){toast("해당 PDF가 열려 있지 않습니다.");return}try{const page=await sgPlan.pdfDoc.getPage(c.source_page),canvas=await pdfPageCanvas(page,1.35);canvas.style.maxWidth="100%";canvas.style.height="auto";canvas.style.border="1px solid #dce5ee";const old=box.querySelector(".sgp-preview");if(old)old.remove();const view=document.createElement("div");view.className="sgp-preview";view.style.cssText="max-height:680px;overflow:auto;margin-top:15px";view.appendChild(canvas);box.appendChild(view)}catch(e){toast(e.message)}};
  box.querySelector("#sgp-approve").onclick=()=>sgApprove(i);
  box.scrollIntoView({behavior:"smooth",block:"center"})
 }
@@ -76,11 +82,14 @@ async function importPlan(file){
   if(hash===state.defaultData.source_sha256){state.areas=structuredClone(state.defaultAreas);state.source="builtin";initSubjects();renderAreaTable();label.textContent="원본 평가계획 해시가 일치합니다. 41개 과목·145개 영역의 검증 기준을 적용했습니다.";sgPlan.candidates=[];if($("sg-plan-panel"))$("sg-plan-panel").remove();toast("2026 평가계획 원본이 확인됐습니다.");return}
   const pdf=await openPDF(file);
   if(pdf.numPages>600)throw Error("600쪽 초과 평가계획은 처리할 수 없습니다.");
-  state.areas=[];state.source="pending-plan";initSubjects();renderAreaTable();sgPlan.candidates=[];sgPlan.pages=pdf.numPages;sgPlan.scanned=0;sgPlan.sourceFile=file.name;sgPlan.lastSubject="";sgPlan.lastDept="";
+  state.areas=[];state.source="pending-plan";initSubjects();renderAreaTable();sgPlan.pdfDoc=pdf;sgPlan.candidates=[];sgPlan.pages=pdf.numPages;sgPlan.scanned=0;sgPlan.sourceFile=file.name;sgPlan.lastSubject="";sgPlan.lastDept="";
   sgRenderCandidates();
   let subject="",dept="",isRubric=false;
   for(let pno=1;pno<=pdf.numPages;pno++){
-   const page=await pdf.getPage(pno),text=await page.getTextContent(),w=page.getViewport({scale:1}).width,words=sgPlanWords(page,text),all=words.map(x=>x.text).join(" ");
+   const page=await pdf.getPage(pno),text=await page.getTextContent(),w=page.getViewport({scale:1}).width;
+   let words=sgPlanWords(page,text);let all=words.map(x=>x.text).join(" ");
+   if(words.length<12){label.textContent="스캔형 평가계획 OCR 분석 중… "+pno+"/"+pdf.numPages+"쪽";const recognized=await sgPlanOCR(page);words=recognized.words;all=recognized.text+" "+words.map(x=>x.text).join(" ");}
+
    label.textContent="새 평가계획 분석 중… "+pno+"/"+pdf.numPages+"쪽 · 자동 추출 "+sgPlan.candidates.length+"개 영역";
    if(pno%4===0)await delay(0);
    const s=sgFindSubject(all,"");if(s)subject=s;
@@ -91,6 +100,7 @@ async function importPlan(file){
    if(stop&&!start)isRubric=false;
    const groups=sgPlanClusters(words,5),heads=sgPlanHeader(groups);
    const rubricLike=heads.length>0&&(/평가척도|평가\s*척도|평가요소|채점기준|배점/.test(all));
+   if(rubricLike&&!isRubric&&words.length>30&&/성취기준/.test(all))isRubric=true;
    if(isRubric&&rubricLike){
     sgPlan.scanned++;for(let hi=0;hi<heads.length;hi++){
      const upper=heads[hi],lower=heads[hi+1]?.y||page.getViewport({scale:1}).height*.91;
@@ -107,6 +117,6 @@ async function importPlan(file){
   if(!total)label.innerHTML+=' <button class="text-btn" id="sg-manual-plan">영역별 배점 수동 등록</button>';
   if($("sg-manual-plan"))$("sg-manual-plan").onclick=showPlanEditor;
   toast("새 평가계획: "+total+"개 영역의 배점 후보 분석 완료"); 
- }catch(e){label.textContent="평가계획 분석 실패: "+e.message;toast(e.message);console.error(e)}finally{sgPlan.running=false}
+ }catch(e){label.textContent="평가계획 분석 실패: "+e.message;toast(e.message);console.error(e)}finally{sgPlan.running=false;if(sgPlan.ocrWorker){await sgPlan.ocrWorker.terminate();sgPlan.ocrWorker=null}}
 }
 document.addEventListener("DOMContentLoaded",()=>{const input=document.createElement("button");input.className="btn secondary";input.textContent="기준 JSON 불러오기";input.onclick=()=>{sgPlanPanel().querySelector("#sg-import-json").click()};$("download-reference").insertAdjacentElement("afterend",input);});
