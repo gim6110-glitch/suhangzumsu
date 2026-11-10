@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+import { spawn } from "node:child_process";
+const port=4173;
+const proc=spawn("python3",["-m","http.server",String(port),"--bind","127.0.0.1"],{stdio:"ignore"});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let browser;
+try{
+ await sleep(1100);
+ browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
+ const page=await browser.newPage({acceptDownloads:true});
+ const errors=[];
+ page.on("pageerror",err=>errors.push(err.message));
+ await page.goto("http://127.0.0.1:"+port+"/",{waitUntil:"domcontentloaded",timeout:30000});
+ await page.waitForFunction(()=>document.querySelector("#stat-areas")?.textContent.trim()==="145",{timeout:20000});
+ assert.equal(await page.locator("#stat-subjects").textContent(),"41");
+ await page.selectOption("#plan-scope","grade2");
+ await page.waitForFunction(()=>document.querySelector("#stat-areas")?.textContent.trim()==="30");
+ await page.selectOption("#plan-scope","grade3");
+ await page.waitForFunction(()=>document.querySelector("#stat-areas")?.textContent.trim()==="28");
+ await page.selectOption("#plan-scope","vocational");
+ await page.click('[data-tab="verify"]');
+ await page.evaluate(()=>{
+   state.scans=[{sourceIndex:0,page:1,readOk:false,readError:"Synthetic OCR failed",rows:[],cols:[],subject:null,scope:"grade2"}];
+   state.activePage=0;state.pdfs=[{}];
+   options(document.getElementById("verify-page"),[{value:"0",label:"Test PDF page"}]);
+   document.getElementById("scan-result").hidden=false;
+   showScan();
+ });
+ await page.locator("#sg3-rows").fill("2");
+ await page.locator("#sg3-cols").fill("1");
+ await page.locator("#sg3-init-manual").click();
+ await page.waitForSelector('[data-sg3-row="0"][data-sg3-col="0"]');
+ await page.selectOption("#verify-subject",{label:"독서와 작문"});
+ await page.locator('[data-sg3-row="0"][data-sg3-col="0"]').fill("30");
+ await page.locator('[data-sg3-row="0"][data-sg3-col="0"]').blur();
+ await page.locator('[data-sg3-row="1"][data-sg3-col="0"]').fill("5");
+ await page.locator('[data-sg3-row="1"][data-sg3-col="0"]').blur();
+ await page.locator('[data-mapcol="0"]').selectOption("G2-01");
+ await page.locator("#run-verification").click();
+ const summary=await page.locator("#verification-summary").innerText();
+ assert(summary.includes("오류 의심"),summary);
+ assert((await page.locator("#verification-body").innerText()).includes("학생 2행"));
+ const [download]=await Promise.all([page.waitForEvent("download"),page.locator("#export-results").click()]);
+ assert(download.suggestedFilename().includes("익명"),download.suggestedFilename());
+ assert.equal(errors.length,0,"Browser page errors: "+JSON.stringify(errors));
+ console.log("PASS: 3 plan switch, manual OCR fallback, score validation, anonymous CSV download");
+}finally{if(browser)await browser.close();proc.kill("SIGTERM")}
