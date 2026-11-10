@@ -1,7 +1,7 @@
 /* ScoreGuard — client-side evaluation validation. No upload API, no cookies, no student identifiers. */
 "use strict";
 const $ = id=>document.getElementById(id);
-const state={areas:[],defaultAreas:[],subjects:[],source:"builtin",pdf:null,scans:[],activePage:0,mappings:[],verification:[],scanFileName:"",pdfs:[],unknownPlanPages:[],importedName:"",hasOCR:false};
+const state={areas:[],defaultAreas:[],subjects:[],source:"builtin",pdf:null,scans:[],activePage:0,mappings:[],verification:[],scanFileName:"",pdfs:[],unknownPlanPages:[],importedName:"",hasOCR:false,referenceSources:{},planScope:"vocational"};
 const isBad=a=>Boolean(a.notes && /불일치|상충|검토|확인 필요/.test(a.notes));
 const norm=t=>String(t||"").replace(/[\s·\-_.()[\]]+/g,"").toLowerCase();
 const areaKey=a=>a.department+" / "+a.subject;
@@ -88,8 +88,40 @@ state.mappings=mapping;const results=[];for(const row of scan.rows){for(const m 
 function renderVerification(){const all=state.verification;const counts={ok:0,error:0,review:0};all.forEach(x=>counts[x.kind]++);$("verification-summary").innerHTML='<div class="summary-item">검증 점수<b>'+fmt(all.length)+'</b></div><div class="summary-item">정상<b>'+fmt(counts.ok)+'</b></div><div class="summary-item">오류 의심<b>'+fmt(counts.error)+'</b></div><div class="summary-item">확인 필요<b>'+fmt(counts.review)+'</b></div>';const filter=$("only-problems").checked?all.filter(x=>x.kind!=="ok"):all;$("verification-body").innerHTML=filter.map((r,i)=>'<tr><td>학생 '+r.row+'행</td><td>'+escaped(r.area)+'</td><td><input class="input-score '+(r.kind!=="ok"?"flag":"")+'" data-result-index="'+all.indexOf(r)+'" type="number" step="0.01" min="0" value="'+(r.value===null?"":r.value)+'" aria-label="학생 '+r.row+'행 점수 수정"></td><td>'+r.max+'</td><td><span class="status '+r.kind+'">'+escaped(r.status)+'</span></td><td style="white-space:normal;min-width:220px">'+escaped(r.reason)+'</td></tr>').join("")||'<tr><td class="empty" colspan="6">해당 조건의 점수 기록이 없습니다.</td></tr>'}
 function updateResult(idx,str){const r=state.verification[idx];if(!r)return;const v=str.trim()===""?null:Number(str);r.value=v;const a=state.areas.find(a=>a.id===r.areaId);Object.assign(r,validation(a,v));renderVerification()}
 function exportResults(){if(!state.verification.length)return;downloadCSV("수행평가_점수검증_익명결과.csv",["파일번호","PDF쪽","학생행번호","학과","과목","평가영역","기록점수","만점","판정","사유"],state.verification.map(r=>[r.file,r.page,r.row,r.department,r.subject,r.area,r.value??"",r.max,r.status,r.reason]));toast("이름과 학번 없이 결과를 저장했습니다.")}
-async function initialize(){try{const r=await fetch("./data/reference_2026.json",{cache:"no-store"});if(!r.ok)throw Error("기준 데이터 불러오기 실패");const ref=await r.json();if(!Array.isArray(ref.areas)||ref.areas.length!==145)throw Error("배점 기준 영역 수 확인 실패");state.defaultData=ref;state.defaultAreas=ref.areas;state.areas=structuredClone(ref.areas);initSubjects();renderAreaTable();refreshStats();$("plan-status").textContent="2026학년도 2학기 기준 41개 과목 · 145개 영역이 기본 등록되었습니다."}catch(e){toast("초기화 실패: "+e.message);$("plan-status").textContent=e.message}}
+function selectPlanRef(key,silent=false){
+ const ref=state.referenceSources[key];if(!ref||!Array.isArray(ref.areas))throw Error("해당 학년의 기준을 불러오지 못했습니다.");
+ state.planScope=key;state.areas=structuredClone(ref.areas);state.source=key;
+ state.verification=[];state.scans=[];state.activePage=0;state.mappings=[];
+ const scopeEl=$("plan-scope");if(scopeEl)scopeEl.value=key;
+ $("scan-result").hidden=true;
+ $("export-results").disabled=true;
+ $("plan-status").textContent=ref.source_name+" · 수행평가 "+ref.areas.length+"개 영역 · 가능 총점 "+ref.areas.reduce((n,a)=>n+a.allowed.length,0)+"건이 적용되었습니다.";
+ initSubjects();renderAreaTable();refreshStats();
+ if(!silent)toast("평가계획 변경: "+ref.source_name+". 기존 일람표 분석은 초기화했습니다.");
+}
+async function initialize(){
+ try{
+  const locations=[
+   ["vocational","./data/reference_2026.json",145],
+   ["grade2","./data/reference_grade2_enrolled_2026.json",30],
+   ["grade3","./data/reference_grade3_enrolled_2026.json",28]
+  ];
+  const refs=await Promise.all(locations.map(async ([key,path,count])=>{
+    const r=await fetch(path,{cache:"no-store"});if(!r.ok)throw Error(path+" 불러오기 실패");
+    const ref=await r.json();
+    if(!Array.isArray(ref.areas)||ref.areas.length!==count)throw Error(path+" 영역 수 불일치");
+    for(const a of ref.areas)if(!Array.isArray(a.allowed)||!a.allowed.includes(a.max))throw Error("배점 목록 검증 실패: "+a.id);
+    return [key,ref];
+  }));
+  state.referenceSources=Object.fromEntries(refs);
+  state.defaultData=state.referenceSources.vocational;
+  state.defaultAreas=state.defaultData.areas;
+  selectPlanRef("vocational",true);
+ }catch(e){toast("초기화 실패: "+e.message);$("plan-status").textContent=e.message}
+}
+
 document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll(".nav-link").forEach(b=>b.addEventListener("click",()=>go(b.dataset.tab)));document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
+$("plan-scope").addEventListener("change",e=>{try{selectPlanRef(e.target.value)}catch(err){toast(err.message)}});
 $("dept-select").addEventListener("change",refreshSubject);$("subject-select").addEventListener("change",refreshAreas);$("area-select").addEventListener("change",renderArea);$("area-search").addEventListener("input",renderAreaTable);
 $("all-areas-body").addEventListener("click",e=>{const btn=e.target.closest("[data-area-id]");if(!btn)return;const a=state.areas.find(a=>a.id===btn.dataset.areaId);if(!a)return;$("dept-select").value=a.department;refreshSubject();$("subject-select").value=a.subject;refreshAreas();$("area-select").value=a.id;renderArea();$("area-details").scrollIntoView({behavior:"smooth"})});
 $("download-reference").addEventListener("click",exportReference);
