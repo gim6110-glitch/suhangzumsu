@@ -67,10 +67,21 @@ async function sgOcrGrid(canvas,g,onProgress){
  const colUse=numericCols.length?numericCols:g.cols;
  const candidate=rows.map((r,i)=>colUse.filter(col=>r.entries[col]?.value!==null).length>=Math.min(2,colUse.length)?i:-1).filter(i=>i>=0);
  if(!candidate.length)throw Error("숫자 칸에서 점수를 판독하지 못했습니다. 스캔 해상도를 높여 주세요.");
- const start=candidate[0];rows=rows.slice(start);
+ const allRecognizedRows=rows;
+ const denseMin=Math.min(3,colUse.length);
+ const density=rows.map(r=>colUse.filter(c=>r.entries[c]?.value!==null).length);
+ let start=candidate[0];
+ for(let i=0;i<rows.length;i++){
+   if(density[i]<denseMin)continue;
+   const following=[density[i+1]||0,density[i+2]||0,density[i+3]||0].filter(n=>n>=denseMin).length;
+   if(following>=1){if(i-start<=7)start=Math.max(start,i);break}
+ }
+ rows=rows.slice(start);
  const allRows=rows;let end=sgGuessStudentEnd(allRows,colUse);rows=allRows.slice(0,end);
  rows.forEach((r,i)=>r.studentRow=i+1);
- return {rows,allRows,cols:colUse,grid:g,ocrWarnings:g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[]}
+ const warnings=g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[];
+ if(start>0)warnings.push("표의 앞쪽 "+start+"개 구간을 머리글 후보로 제외했습니다. 학생 첫 행이 누락되지 않았는지 확인하세요.");
+ return {rows,allRows,allRecognizedRows,startOffset:start,cols:colUse,grid:g,ocrWarnings:warnings}
 }
 async function scanFiles(files){
  if(sg2.busy){toast("다른 PDF를 분석하는 중입니다.");return}
