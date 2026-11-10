@@ -44,6 +44,8 @@ try{
  await page.waitForFunction(()=>state.scans.length>0&&!sg2.busy,{timeout:130000});
  const scan=await page.evaluate(()=>state.scans.map(s=>({readOk:s.readOk,rows:s.rows?.length,cols:s.cols?.length,err:s.readError||"",sample:s.rows?.slice(0,3).map(r=>Object.values(r.entries).map(x=>x?.value))})));
  console.log("SCAN_RESULT",JSON.stringify(scan));
+ const diag=await page.evaluate(()=>{const s=state.scans[0];return {xs:s.grid?.xs,ys:s.grid?.ys,cols:s.cols,rows:s.rows?.map(r=>({row:r.studentRow,entries:Object.entries(r.entries).map(([c,v])=>[c,v.value,v.raw,v.confidence])}))}});
+ console.log("SCAN_DEBUG",JSON.stringify(diag));
  assert.equal(scan.length,1);
  assert(scan[0].readOk,"Synthetic PDF OCR should succeed: "+scan[0].err);
  assert(scan[0].rows>=6,"Too few recognized rows: "+scan[0].rows);
