@@ -52,7 +52,23 @@ showScan=function(){
  if(scan&&scope)scope.value=scan.scope||"";
  sg3ShowManual(scan);
  sg3ShowReviewAction(scan);
+ sg3ShowRowStart(scan);
 };
+function sg3ShowRowStart(s){
+ let box=$("sg3-rowstart");if(!box){box=document.createElement("div");box.id="sg3-rowstart";box.className="actions";$("sg-multipage")?.appendChild(box)}
+ if(!box)return;
+ if(!s?.readOk||s.manual||!s.allRecognizedRows?.length){box.hidden=true;return}
+ box.hidden=false;
+ box.innerHTML='<label class="muted">학생 시작 구간 <input id="sg3-start-row" type="number" min="1" max="'+s.allRecognizedRows.length+'" value="'+((s.startOffset||0)+1)+'" style="width:77px;padding:8px;border:1px solid #d6e1ec;border-radius:8px"></label><button id="sg3-apply-start" class="btn secondary">학생 시작 행 다시 지정</button>';
+ box.querySelector("#sg3-apply-start").onclick=()=>{
+  const start=Number($("sg3-start-row").value)-1;
+  if(!Number.isInteger(start)||start<0||start>=s.allRecognizedRows.length){toast("올바른 시작 구간을 선택하세요.");return}
+  s.startOffset=start;s.allRows=s.allRecognizedRows.slice(start);
+  s.rows=s.allRows.slice(0,Math.min(s.rows.length,s.allRows.length)).map((r,i)=>({...r,studentRow:i+1}));
+  s.reviewed=false;state.verification=[];refreshStats();
+  showScan();toast("학생 시작 구간을 변경했습니다. 원본의 첫 학생이 포함됐는지 확인하세요.")
+ }
+}
 function sg3EnsureManual(){
  let node=$("sg3-manual");
  if(node)return node;
