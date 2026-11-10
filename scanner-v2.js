@@ -62,14 +62,14 @@ async function sgOcrGrid(canvas,g,onProgress){
  }
  onProgress("점수 열 "+(ci+1)+"/"+g.cols.length+" 판독 완료");await delay(0)
  }
- let rows=entries.map((e,i)=>({index:i+1,entries:e,studentRow:i+1,numeric:Object.values(e).filter(x=>x?.value!==null).length}));
- const numericCols=g.cols.filter(col=>entries.filter(e=>e[col]?.value!==null).length>=Math.max(2,Math.floor(entries.length*.18)));
+ let rows=entries.map((e,i)=>({index:i+1,entries:e,studentRow:i+1,numeric:Object.values(e).filter(x=>Number.isFinite(x?.value)).length}));
+ const numericCols=g.cols.filter(col=>entries.filter(e=>Number.isFinite(e[col]?.value)).length>=Math.max(2,Math.floor(entries.length*.18)));
  const colUse=numericCols.length?numericCols:g.cols;
- const candidate=rows.map((r,i)=>colUse.filter(col=>r.entries[col]?.value!==null).length>=Math.min(2,colUse.length)?i:-1).filter(i=>i>=0);
+ const candidate=rows.map((r,i)=>colUse.filter(col=>Number.isFinite(r.entries[col]?.value)).length>=Math.min(2,colUse.length)?i:-1).filter(i=>i>=0);
  if(!candidate.length)throw Error("숫자 칸에서 점수를 판독하지 못했습니다. 스캔 해상도를 높여 주세요.");
  const allRecognizedRows=rows;
  const denseMin=Math.min(3,colUse.length);
- const density=rows.map(r=>colUse.filter(c=>r.entries[c]?.value!==null).length);
+ const density=rows.map(r=>colUse.filter(c=>Number.isFinite(r.entries[c]?.value)).length);
  let start=candidate[0];
  for(let i=0;i<rows.length;i++){
    if(density[i]<denseMin)continue;
@@ -81,7 +81,7 @@ async function sgOcrGrid(canvas,g,onProgress){
  rows.forEach((r,i)=>r.studentRow=i+1);
  const warnings=g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[];
  if(start>0)warnings.push("표의 앞쪽 "+start+"개 구간을 머리글 후보로 제외했습니다. 학생 첫 행이 누락되지 않았는지 확인하세요.");
- return {rows,allRows,allRecognizedRows,startOffset:start,densityDebug:{candidate,density,denseMin,start},cols:colUse,grid:g,ocrWarnings:warnings}
+ return {rows,allRows,allRecognizedRows,startOffset:start,cols:colUse,grid:g,ocrWarnings:warnings}
 }
 async function scanFiles(files){
  if(sg2.busy){toast("다른 PDF를 분석하는 중입니다.");return}
