@@ -65,7 +65,7 @@
 <div id="scan-result" hidden>
 <div class="section-top"><div><h2>표 판독 결과</h2><p class="muted" id="scan-info"></p></div><button class="btn secondary" id="reset-scan">다른 파일 확인</button></div>
 <div class="notice neutral"><span class="notice-icon">!</span><div><b>영역 연결 확인이 필요합니다.</b><p>일람표의 점수 열에는 <b>능력단위 소계, 영역별 소계, 총계</b>가 섞일 수 있습니다. 아래 드롭다운에서 실제 평가 영역에 해당하는 점수 열을 선택하세요.</p></div></div>
-<div class="filter-row"><label>검증 학과<select id="verify-dept"></select></label><label>검증 과목<select id="verify-subject"></select></label><label>PDF 페이지<select id="verify-page"></select></label></div>
+<div class="filter-row"><label>이 페이지의 평가계획<select id="verify-scope" aria-label="페이지별 평가계획 선택"><option value="">학년·과정을 선택하세요</option><option value="vocational">3학년 진로심화과정</option><option value="grade2">2학년 재학과정</option><option value="grade3">3학년 재학과정</option></select></label><label>검증 학과<select id="verify-dept"></select></label><label>검증 과목<select id="verify-subject"></select></label><label>PDF 페이지<select id="verify-page"></select></label></div>
 <div id="column-mapping" class="mapping-grid"></div>
 <div class="row actions"><button class="btn primary" id="run-verification">선택한 영역 점수 검증</button><button class="btn secondary" id="export-results" disabled>익명 결과 CSV 저장</button><label class="check"><input type="checkbox" id="only-problems"> 이상·확인 필요만 보기</label></div>
 <div id="verification-summary" class="summary-grid"></div>
