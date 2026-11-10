@@ -11,6 +11,8 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script defer src="./app.js"></script>
+<script defer src="./scanner-v2.js"></script>
+<script defer src="./plan-import-v2.js"></script>
 </head>
 <body>
 <div class="shell">
@@ -49,7 +51,7 @@
 </section>
 <section id="reference" class="page">
 <div class="section-top"><div><div class="eyebrow">EVALUATION PLAN</div><h1>평가계획 · 가능한 점수</h1><p class="section-desc">학과 → 과목 → 평가 영역을 선택하면 해당 영역에서 실제 만들 수 있는 합계 점수를 보여줍니다.</p></div><button id="download-reference" class="btn secondary">기준 전체 CSV 저장</button></div>
-<div class="upload-strip"><div class="upload-mark">PDF</div><div class="upload-copy"><b>평가계획 PDF 불러오기</b><small>기준 문서와 일치하면 검증된 145개 영역을 바로 사용합니다. 다른 문서의 경우 추출 결과를 검토한 뒤 사용할 수 있습니다.</small></div><label class="btn outline" for="plan-input">PDF 선택</label><input id="plan-input" type="file" accept=".pdf,application/pdf" hidden></div>
+<div class="upload-strip"><div class="upload-mark">PDF</div><div class="upload-copy"><b>평가계획 PDF 불러오기</b><small>2026학년도 원본은 즉시 적용합니다. 다른 학기·과목의 평가계획은 배점표를 분석해 보여주며, 원문 확인 후 승인한 영역만 검증에 적용합니다.</small></div><label class="btn outline" for="plan-input">PDF 선택</label><input id="plan-input" type="file" accept=".pdf,application/pdf" hidden></div>
 <div id="plan-status" class="helper"></div>
 <div class="filter-row"><label>학과<select id="dept-select" aria-label="학과"></select></label><label>과목<select id="subject-select" aria-label="과목"></select></label><label>수행평가 영역<select id="area-select" aria-label="영역"></select></label></div>
 <div id="area-details" class="details"><div class="empty">영역을 선택해 주세요.</div></div>
@@ -57,8 +59,8 @@
 <div class="table-wrap"><table><thead><tr><th>학과 / 과목</th><th>평가 영역</th><th>만점</th><th>기본</th><th>가능 점수 수</th><th>상태</th></tr></thead><tbody id="all-areas-body"></tbody></table></div>
 </section>
 <section id="verify" class="page">
-<div class="eyebrow">SCORE AUDIT</div><h1>수행평가 일람표 검증</h1><p class="section-desc">스캔 PDF도 가능하며, 학번·이름이 아닌 <b>학생 행 번호</b>로 표시됩니다. 파일은 업로드 서버에 저장되지 않습니다.</p>
-<div class="upload-panel" id="sheet-drop"><div class="upload-mark large">↥</div><h2>수행평가 일람표 PDF 선택</h2><p>PDF 파일을 여기에 놓거나 파일을 선택하세요. 20쪽 이하 권장.</p><label for="sheet-input" class="btn primary">일람표 PDF 선택</label><input id="sheet-input" type="file" multiple accept=".pdf,application/pdf" hidden><small>표준 가로형 / 능력단위 소계 포함형 지원 · 스캔본은 OCR이 필요합니다</small></div>
+<div class="eyebrow">SCORE AUDIT</div><h1>수행평가 일람표 검증</h1><p class="section-desc">스캔 PDF도 가능하며, 25쪽 이상의 PDF도 처리합니다. 학번·이름이 아닌 <b>학생 행 번호</b>로 표시됩니다. 파일은 업로드 서버에 저장되지 않습니다.</p>
+<div class="upload-panel" id="sheet-drop"><div class="upload-mark large">↥</div><h2>수행평가 일람표 PDF 선택</h2><p>PDF 파일을 여기에 놓거나 파일을 선택하세요. 파일당 최대 150쪽, 페이지마다 점수 열 연결을 확인합니다.</p><label for="sheet-input" class="btn primary">일람표 PDF 선택</label><input id="sheet-input" type="file" multiple accept=".pdf,application/pdf" hidden><small>표준 가로형 / 능력단위 소계 포함형 지원 · 스캔본은 OCR이 필요합니다</small></div>
 <div class="processing" id="processing" hidden><div class="spinner"></div><div><b id="processing-title">PDF 분석 중</b><p id="processing-detail">표 구조를 확인하고 있습니다.</p></div></div>
 <div id="scan-result" hidden>
 <div class="section-top"><div><h2>표 판독 결과</h2><p class="muted" id="scan-info"></p></div><button class="btn secondary" id="reset-scan">다른 파일 확인</button></div>
@@ -75,7 +77,7 @@
 <div class="guide-stack"><article><h2>1. 검증된 평가계획 기준</h2><p>2026학년도 2학기 3학년 진로심화과정 평가계획에 대한 기준 41과목·145영역이 기본 제공됩니다. 평가계획 PDF 원본을 불러오면 문서 해시를 대조하여 일치 여부를 확인합니다.</p></article>
 <article><h2>2. 가능한 점수의 의미</h2><p>평가항목마다 배점 중 하나씩 선택해 더할 수 있는 총점만 정상 후보로 인정합니다. 50점 만점인 영역에서 50점부터 기본점수까지 모두 가능한 것은 아닙니다. 총점 환산형 영역은 고시된 총점표에 따릅니다.</p></article>
 <article><h2>3. 스캔본의 정확도</h2><p>OCR은 50.00을 90.00으로 읽거나 줄을 건너뛸 수 있습니다. 판독된 점수는 직접 수정할 수 있습니다. 열 매핑이 확정되지 않은 상태에서 결과를 확정하거나 실제 학생 성적을 수정하지 마세요.</p></article>
-<article><h2>4. 다른 평가계획 PDF</h2><p>원본과 다른 평가계획은 표 구조가 다를 수 있어 정확한 점수 자동 추출을 보장할 수 없습니다. 새 문서에서 추출된 항목은 반드시 검토·승인 후 검증 기준으로 사용해야 합니다. 스캔된 평가계획은 별도 디지털 텍스트가 필요할 수 있습니다.</p></article>
+<article><h2>4. 다른 평가계획 PDF</h2><p>디지털 텍스트가 있는 새로운 평가계획을 올리면 각 평가척도 페이지에서 항목별 점수를 찾아 만점·기본점수와 합산 검증합니다. 자동 추출된 후보를 직접 수정·승인한 뒤 검증에 사용합니다. 스캔된 평가계획 PDF는 숫자와 구조를 자동으로 완전 복원하기 어렵기 때문에 확인된 기준만 수동 등록해야 합니다.</p></article>
 <article><h2>5. 개인정보 및 저장</h2><p>정적 사이트로 운영하므로 데이터베이스나 계정이 필요하지 않습니다. PDF 분석을 위해 브라우저가 외부 라이브러리를 불러올 수 있지만 원본 학생 파일을 서버에 업로드하지는 않습니다. 개인정보가 포함된 PDF를 GitHub 저장소에 올리지 마세요.</p></article></div>
 </section>
 <footer class="footer">ScoreGuard · 교육용 점수 감사 도구 <span>검증 결과는 학업성적관리규정을 대체하지 않습니다.</span></footer>
