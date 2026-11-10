@@ -81,7 +81,7 @@ async function sgOcrGrid(canvas,g,onProgress){
  rows.forEach((r,i)=>r.studentRow=i+1);
  const warnings=g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[];
  if(start>0)warnings.push("표의 앞쪽 "+start+"개 구간을 머리글 후보로 제외했습니다. 학생 첫 행이 누락되지 않았는지 확인하세요.");
- return {rows,allRows,allRecognizedRows,startOffset:start,cols:colUse,grid:g,ocrWarnings:warnings}
+ return {rows,allRows,allRecognizedRows,startOffset:start,densityDebug:{candidate,density,denseMin,start},cols:colUse,grid:g,ocrWarnings:warnings}
 }
 async function scanFiles(files){
  if(sg2.busy){toast("다른 PDF를 분석하는 중입니다.");return}
