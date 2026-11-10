@@ -80,7 +80,8 @@ async function importPlan(file){
  try{
   if(file.size>100*1024*1024)throw Error("100MB 초과 PDF는 지원하지 않습니다.");
   const hash=await hashHex(file);
-  if(hash===state.defaultData.source_sha256){state.areas=structuredClone(state.defaultAreas);state.source="builtin";initSubjects();renderAreaTable();label.textContent="원본 평가계획 해시가 일치합니다. 41개 과목·145개 영역의 검증 기준을 적용했습니다.";sgPlan.candidates=[];if($("sg-plan-panel"))$("sg-plan-panel").remove();toast("2026 평가계획 원본이 확인됐습니다.");return}
+  const known=Object.entries(state.referenceSources||{}).find(([key,ref])=>ref.source_sha256===hash);
+  if(known){selectPlanRef(known[0],true);label.textContent="원본 평가계획 일치: "+known[1].source_name+" · "+known[1].areas.length+"개 수행평가 영역 적용";sgPlan.candidates=[];if($("sg-plan-panel"))$("sg-plan-panel").remove();toast("해당 학년·과정 평가계획을 자동 선택했습니다.");return}
   const pdf=await openPDF(file);
   if(pdf.numPages>600)throw Error("600쪽 초과 평가계획은 처리할 수 없습니다.");
   state.areas=[];state.source="pending-plan";initSubjects();renderAreaTable();sgPlan.pdfDoc=pdf;sgPlan.candidates=[];sgPlan.pages=pdf.numPages;sgPlan.scanned=0;sgPlan.sourceFile=file.name;sgPlan.lastSubject="";sgPlan.lastDept="";
