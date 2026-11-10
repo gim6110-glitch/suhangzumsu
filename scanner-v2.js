@@ -63,12 +63,14 @@ async function sgOcrGrid(canvas,g,onProgress){
  onProgress("점수 열 "+(ci+1)+"/"+g.cols.length+" 판독 완료");await delay(0)
  }
  let rows=entries.map((e,i)=>({index:i+1,entries:e,studentRow:i+1,numeric:Object.values(e).filter(x=>x?.value!==null).length}));
- const candidate=rows.map((r,i)=>r.numeric>=Math.min(2,g.cols.length)?i:-1).filter(i=>i>=0);
+ const numericCols=g.cols.filter(col=>entries.filter(e=>e[col]?.value!==null).length>=Math.max(2,Math.floor(entries.length*.18)));
+ const colUse=numericCols.length?numericCols:g.cols;
+ const candidate=rows.map((r,i)=>colUse.filter(col=>r.entries[col]?.value!==null).length>=Math.min(2,colUse.length)?i:-1).filter(i=>i>=0);
  if(!candidate.length)throw Error("숫자 칸에서 점수를 판독하지 못했습니다. 스캔 해상도를 높여 주세요.");
  const start=candidate[0];rows=rows.slice(start);
- const allRows=rows;let end=sgGuessStudentEnd(allRows,g.cols);rows=allRows.slice(0,end);
+ const allRows=rows;let end=sgGuessStudentEnd(allRows,colUse);rows=allRows.slice(0,end);
  rows.forEach((r,i)=>r.studentRow=i+1);
- return {rows,allRows,cols:g.cols,grid:g,ocrWarnings:g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[]}
+ return {rows,allRows,cols:colUse,grid:g,ocrWarnings:g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[]}
 }
 async function scanFiles(files){
  if(sg2.busy){toast("다른 PDF를 분석하는 중입니다.");return}
@@ -124,7 +126,7 @@ async function sgPreviewScores(){
  const s=state.scans[state.activePage];if(!s?.readOk||!s.grid){toast("이 페이지의 점수 칸이 아직 분석되지 않았습니다.");return}
  try{
  const doc=state.pdfs[s.sourceIndex],page=await doc.getPage(s.page),canvas=await pdfPageCanvas(page,2.2);
- const g=s.grid;const x0=Math.max(0,Math.floor(g.xs[g.cols[0]]+2)),x1=Math.min(canvas.width,Math.ceil(g.xs.at(-1)-2)),y0=Math.max(0,g.ys[0]),y1=Math.min(canvas.height,g.ys.at(-1));
+ const g=s.grid;const x0=Math.max(0,Math.floor(g.xs[s.cols[0]]+2)),x1=Math.min(canvas.width,Math.ceil(g.xs[Math.max(...s.cols)+1]-2)),y0=Math.max(0,g.ys[0]),y1=Math.min(canvas.height,g.ys.at(-1));
  if(x1<=x0||y1<=y0)throw Error("안전한 숫자 열 범위를 표시할 수 없습니다.");
  let box=$("sg-score-preview");if(!box){box=document.createElement("div");box.id="sg-score-preview";box.className="details";$("column-mapping").insertAdjacentElement("afterend",box)}
  box.innerHTML='<h3>개인정보를 제외한 점수 열 확인</h3><p class="muted">원본 PDF에서 성명·학번 영역을 제외하고 점수 열만 보여줍니다. 원본 PDF는 외부로 전송되지 않습니다.</p>';
