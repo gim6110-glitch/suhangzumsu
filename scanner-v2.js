@@ -66,9 +66,9 @@ async function sgOcrGrid(canvas,g,onProgress){
  const candidate=rows.map((r,i)=>r.numeric>=Math.min(2,g.cols.length)?i:-1).filter(i=>i>=0);
  if(!candidate.length)throw Error("숫자 칸에서 점수를 판독하지 못했습니다. 스캔 해상도를 높여 주세요.");
  const start=candidate[0];rows=rows.slice(start);
- let end=sgGuessStudentEnd(rows,g.cols);rows=rows.slice(0,end);
+ const allRows=rows;let end=sgGuessStudentEnd(allRows,g.cols);rows=allRows.slice(0,end);
  rows.forEach((r,i)=>r.studentRow=i+1);
- return {rows,cols:g.cols,grid:g,ocrWarnings:g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[]}
+ return {rows,allRows,cols:g.cols,grid:g,ocrWarnings:g.inferred?["일부 열 경계가 추정되었습니다. 점수 열 연결을 확인하세요."]:[]}
 }
 async function scanFiles(files){
  if(sg2.busy){toast("다른 PDF를 분석하는 중입니다.");return}
@@ -109,19 +109,23 @@ async function scanFiles(files){
 }
 function sgRefreshPageSelect(){options($("verify-page"),state.scans.map((s,i)=>({value:String(i),label:"파일 "+(s.sourceIndex+1)+" / "+s.page+"쪽"+(s.readOk?" · "+s.rows.length+"행":" · 판독 실패")})));$("verify-page").value=String(state.activePage)}
 function sgControlBar(){let el=$("sg-multipage");if(el)return el;
- el=document.createElement("div");el.id="sg-multipage";el.className="details";el.innerHTML='<div class="actions"><button class="btn secondary" id="sg-prev">← 이전 페이지</button><button class="btn secondary" id="sg-next">다음 페이지 →</button><button class="btn primary" id="sg-verify-all">매핑 확인된 모든 페이지 검증</button><button class="btn secondary" id="sg-export-mapping">기준 연결표 CSV</button></div><p id="sg-scan-errors" class="muted"></p><p class="muted">일람표는 파일마다 과목이 다를 수 있습니다. 각 페이지에서 영역 연결을 확인한 뒤 검증하세요. 누락되거나 판독이 불분명한 페이지는 ‘확인 필요’로 남깁니다.</p>';
+ el=document.createElement("div");el.id="sg-multipage";el.className="details";el.innerHTML='<div class="actions"><button class="btn secondary" id="sg-prev">← 이전 페이지</button><button class="btn secondary" id="sg-next">다음 페이지 →</button><button class="btn primary" id="sg-verify-all">매핑 확인된 모든 페이지 검증</button><button class="btn secondary" id="sg-export-mapping">기준 연결표 CSV</button></div><div class="actions"><label class="check">학생 점수 행 수 <input id="sg-student-count" type="number" min="1" max="200" style="width:75px;padding:8px;border:1px solid #ccdce9;border-radius:8px"></label><button class="btn secondary" id="sg-apply-count">학생 행 수 적용</button><button class="btn secondary" id="sg-copy-mapping">동일 과목·동일 열 구조에 매핑 적용</button></div><p id="sg-scan-errors" class="muted"></p><p class="muted">일람표는 파일마다 과목이 다를 수 있습니다. 각 페이지에서 영역 연결을 확인한 뒤 검증하세요. 누락되거나 판독이 불분명한 페이지는 ‘확인 필요’로 남깁니다.</p>';
  $("scan-result").insertBefore(el,$("scan-result").children[1]);
  el.querySelector("#sg-prev").onclick=()=>sgTurn(-1);el.querySelector("#sg-next").onclick=()=>sgTurn(1);
  el.querySelector("#sg-verify-all").onclick=sgVerifyAll;
+ el.querySelector("#sg-apply-count").onclick=sgApplyStudentCount;
+ el.querySelector("#sg-copy-mapping").onclick=sgCopyMappings;
  el.querySelector("#sg-export-mapping").onclick=()=>downloadCSV("수행평가_페이지별_영역연결_익명.csv",["파일번호","쪽","판독상태","학과","과목","영역ID","점수열"],state.scans.flatMap(s=>!s.readOk?[[s.sourceIndex+1,s.page,"실패", "","", "", ""]]: (s.savedMapping||[]).map(m=>[s.sourceIndex+1,s.page,"완료",s.subject?.department||"",s.subject?.subject||"",m.areaId,m.col])));
  return el
 }
+function sgApplyStudentCount(){const scan=state.scans[state.activePage];if(!scan?.allRows)return;const n=Number($("sg-student-count").value);if(!Number.isInteger(n)||n<1||n>scan.allRows.length){toast("1~"+scan.allRows.length+" 사이의 행 수를 입력하세요.");return}scan.rows=scan.allRows.slice(0,n).map((r,i)=>({...r,studentRow:i+1}));scan.rowsManuallySet=true;showScan();toast("학생 점수 행 "+n+"개로 적용했습니다.")}
+function sgCopyMappings(){const s=state.scans[state.activePage];if(!s?.readOk)return;const mapping=sgMapping().filter(m=>m.areaId!=="__TOTAL__"||m.areaId==="__TOTAL__");if(!mapping.length){toast("먼저 점수 열을 연결하세요.");return}s.savedMapping=mapping;s.subject={department:$("verify-dept").value,subject:$("verify-subject").value};let count=0;for(const other of state.scans){if(other===s||!other.readOk||other.cols.length!==s.cols.length)continue;const same=other.subject&&other.subject.department===s.subject.department&&other.subject.subject===s.subject.subject;if(!same)continue;const indexMapping=mapping.map(m=>{const ix=s.cols.indexOf(m.col);return {col:other.cols[ix],areaId:m.areaId}});if(indexMapping.some(x=>x.col===undefined))continue;other.savedMapping=indexMapping;count++}toast("동일 학과·과목에 "+count+"쪽의 점수 열 연결을 복사했습니다.")}
 function sgTurn(delta){if(!state.scans.length)return;state.activePage=Math.min(state.scans.length-1,Math.max(0,state.activePage+delta));$("verify-page").value=String(state.activePage);showScan()}
 function showScan(){const scan=state.scans[state.activePage];if(!scan)return;sgControlBar();$("scan-info").textContent="파일 "+(scan.sourceIndex+1)+" / PDF "+scan.page+"쪽"+(scan.readOk?" · 학생 행 "+scan.rows.length+"개 · 숫자 열 "+scan.cols.length+"개":" · 판독 실패: "+scan.readError);
  if(!scan.readOk){$("column-mapping").innerHTML='<div class="notice neutral">이 페이지의 점수를 읽지 못했습니다. 선명한 파일로 다시 스캔하거나 원본에서 직접 확인해 주세요.</div>';$("run-verification").disabled=true;return}
  $("run-verification").disabled=false;
  if(scan.subject){$("verify-dept").value=scan.subject.department;refreshVerifySubject();$("verify-subject").value=scan.subject.subject}
- renderMappings();$("verify-page").value=String(state.activePage)
+ renderMappings();$("verify-page").value=String(state.activePage);const countEl=$("sg-student-count");if(countEl){countEl.max=String(scan.allRows?.length||scan.rows.length);countEl.value=String(scan.rows.length)}
 }
 function renderMappings(){const scan=state.scans[state.activePage];if(!scan?.readOk)return;const dept=$("verify-dept").value,subject=$("verify-subject").value;const areas=bySubject(dept,subject);
  const boxes=scan.cols.map((col,i)=>{const samples=scan.rows.map(r=>r.entries[col]?.value).filter(n=>n!==null).slice(0,6);const sel=(scan.savedMapping||[]).find(m=>m.col===col);
