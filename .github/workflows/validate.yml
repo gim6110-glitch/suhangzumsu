@@ -24,7 +24,9 @@ jobs:
 
       - name: Install browser test runtime
         run: |
-          npm install --no-save playwright@1.58.2
+          npm install --no-save playwright@1.58.2 pdf-lib@1.17.1
           npx playwright install chromium --with-deps
       - name: Headless browser integration
         run: node tests/browser-smoke.mjs
+      - name: OCR browser test using a synthetic scanned PDF
+        run: node tests/ocr-browser.mjs
