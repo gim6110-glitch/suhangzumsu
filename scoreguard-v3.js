@@ -14,7 +14,7 @@ const SG3samples={
 };
 const SG3scope={v:"vocational","2":"grade2","3":"grade3"};
 function sg3Status(msg){let t=$("sg3-progress");if(!t){t=document.createElement("p");t.id="sg3-progress";t.className="helper";$("scan-result").prepend(t)}t.textContent=msg}
-function sg3FileHex(f){return crypto.subtle.digest("SHA-256",f.arrayBuffer()).then(d=>[...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join(""))}
+async function sg3FileHex(f){const bytes=await f.arrayBuffer();const d=await crypto.subtle.digest("SHA-256",bytes);return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join("")}
 function sg3SampleHint(scan,desc){
  const [tag,name]=String(desc||"").split("|");const scope=SG3scope[tag];if(!scope||!name)return false;
  const pool=state.referenceSources?.[scope]?.areas||[];
@@ -36,6 +36,7 @@ scanFiles=async function(files){
  }
  SG3.sampleMatches=count;
  if(state.scans.length){
+   $("export-results").disabled=false;
    state.activePage=Math.max(0,state.scans.findIndex(s=>s.readOk));
    if($("verify-page"))$("verify-page").value=String(state.activePage);
    showScan();
