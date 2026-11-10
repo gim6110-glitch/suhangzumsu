@@ -10,6 +10,7 @@ const scan={sourceIndex:0,page:1,scope:'vocational',readOk:true,rows:[{studentRo
 const state={referenceSources:{vocational:{areas:[area]}},scans:[scan],verification:[],activePage:0};
 const ctx={state,console,
  document:{addEventListener(){}},window:{confirm:()=>true},URL,Set,Math,Number,
+ getPDFJS:async()=>({}),openPDF:async()=>({}),sgGetOCR:async()=>({}),sgGetHeaderOCR:async()=>({}),sgPlanOCR:async()=>({}),
  scanFiles:async()=>{},showScan:()=>{},sgValidatePage:(_s,m)=>[{file:1,page:1,row:1,col:2,areaId:'A1',area:'실습',value:36,max:50,kind:'ok',status:'정상',reason:'가능 점수'}],
  updateResult:()=>{},exportResults:()=>{},sgVerifyAll:()=>{},renderVerification:()=>{},validation:(a,v)=>({kind:a.allowed.includes(v)?'ok':'error',status:a.allowed.includes(v)?'정상':'오류 의심',reason:''}),
  $,norm:s=>String(s||'').replace(/\\s/g,''),fmt:n=>String(n),escaped:x=>String(x),
