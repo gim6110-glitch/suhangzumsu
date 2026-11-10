@@ -1,10 +1,14 @@
 name: Validate ScoreGuard
+concurrency:
+  group: scoreguard-ci-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: [main]
   pull_request:
 jobs:
   check:
+    timeout-minutes: 8
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +29,7 @@ jobs:
       - name: Install browser test runtime
         run: |
           npm install --no-save playwright@1.58.2 pdf-lib@1.17.1
-          npx playwright install chromium --with-deps
+          npx playwright install chromium
       - name: Headless browser integration
         run: node tests/browser-smoke.mjs
       - name: OCR browser test using a synthetic scanned PDF
