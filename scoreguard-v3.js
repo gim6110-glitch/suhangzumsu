@@ -274,3 +274,47 @@ document.addEventListener("DOMContentLoaded",()=>{
  button.onclick=sg3StartWithoutPDF;
  $("sheet-drop").insertAdjacentElement("afterend",button);
 });
+
+
+/* NCS ability-unit subtotals: compare only areas within the selected unit. */
+const sg3PriorRenderMappings=renderMappings;
+renderMappings=function(){
+ sg3PriorRenderMappings();
+ const scan=state.scans[state.activePage];if(!scan?.readOk||!scan.scope)return;
+ const subject=$("verify-subject")?.value;
+ const pool=(state.referenceSources[scan.scope]?.areas||[]).filter(a=>a.subject===subject&&a.department===$("verify-dept")?.value);
+ const units=[...new Set(pool.map(a=>a.unit?.trim()).filter(Boolean))];
+ if(!units.length)return;
+ for(const el of document.querySelectorAll("[data-mapcol]")){
+   const col=Number(el.dataset.mapcol),prior=scan.savedMapping?.find(m=>m.col===col)?.areaId;
+   for(const unit of units){const value="__UNIT__:"+encodeURIComponent(unit);el.add(new Option("능력단위 소계 — "+unit,value))}
+   if(prior?.startsWith("__UNIT__:"))el.value=prior;
+ }
+};
+const sg3PriorValidatePage=sgValidatePage;
+sgValidatePage=function(scan,mapping){
+ const withoutUnit=mapping.filter(m=>!String(m.areaId).startsWith("__UNIT__:"));
+ const results=sg3PriorValidatePage(scan,withoutUnit);
+ const areas=state.referenceSources?.[scan.scope]?.areas||[];
+ const unitMaps=mapping.filter(m=>String(m.areaId).startsWith("__UNIT__:"));
+ for(const unitCol of unitMaps){
+   const unit=decodeURIComponent(unitCol.areaId.slice("__UNIT__:".length));
+   const areaCols=withoutUnit.filter(m=>areas.some(a=>a.id===m.areaId&&a.unit?.trim()===unit));
+   for(const row of scan.rows){
+     const actual=row.entries[unitCol.col]?.value??null;
+     const values=areaCols.map(m=>row.entries[m.col]?.value??null);
+     const canSum=areaCols.length>0&&values.every(v=>v!==null&&Number.isFinite(v));
+     const sum=canSum?Math.round(values.reduce((a,b)=>a+b,0)*100)/100:null;
+     const allEdited=[unitCol,...areaCols].every(m=>row.entries[m.col]?.manual);
+     const confirmed=!!(scan.reviewed||allEdited);
+     const matches=canSum&&actual!==null&&Math.abs(actual-sum)<.011;
+     let status,kind,reason;
+     if(!canSum||actual===null){status="소계 판독 확인";kind="review";reason="수행평가 영역 또는 소계 점수에 미판독 항목이 있습니다."}
+     else if(!matches){status="소계 불일치 의심";kind="review";reason="기록 "+actual+"점, 해당 능력단위 영역 합 "+sum+"점. 원본 확인 필요"}
+     else if(!confirmed){status="소계 산술 일치·원본 확인 전";kind="review";reason="합계는 일치하나 OCR 숫자를 원본에서 확인하지 않았습니다."}
+     else{status="소계 정상";kind="ok";reason="해당 능력단위의 영역 점수 합과 일치"}
+     results.push({file:scan.sourceIndex+1,page:scan.page,row:row.studentRow,scope:scan.scope,col:unitCol.col,areaId:unitCol.areaId,area:"능력단위 소계: "+unit,department:scan.subject?.department||"",subject:scan.subject?.subject||"",value:actual,max:areaCols.reduce((t,m)=>t+(areas.find(a=>a.id===m.areaId)?.max||0),0),kind,status,reason,readMethod:scan.manual?"수동 입력":"PDF OCR",confirmed})
+   }
+ }
+ return results
+};
