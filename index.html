@@ -18,7 +18,7 @@
 <div class="shell">
 <header class="site-header">
   <div class="brand"><div class="brand-mark">✓</div><div><div class="brand-name">ScoreGuard <span class="brand-ko">수행평가 검증기</span></div><div class="brand-sub">평가계획 기반 · 점수 오류 탐지</div></div></div>
-  <div class="header-actions"><span class="privacy-chip"><span class="green-dot"></span>서버에 학생정보 저장 안 함</span><a class="github" href="https://github.com/gim6110-glitch/suhangzumsu" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a></div>
+  <div class="header-actions"><label class="scope-picker">평가계획 <select id="plan-scope" aria-label="학년 및 과정 평가계획 선택"><option value="vocational">3학년 진로심화과정</option><option value="grade2">2학년 재학과정</option><option value="grade3">3학년 재학과정</option></select></label><span class="privacy-chip"><span class="green-dot"></span>서버에 학생정보 저장 안 함</span><a class="github" href="https://github.com/gim6110-glitch/suhangzumsu" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a></div>
 </header>
 <div class="layout">
 <aside class="sidebar">
@@ -43,7 +43,7 @@
 <div class="stat"><div class="stat-label">현재 검증 결과</div><strong id="stat-results">—</strong><span>검증된 점수 셀</span></div>
 </div>
 <div class="steps">
-<div class="step-card"><div class="step-count">01</div><h3>평가계획 확인</h3><p>현재 내장된 2026년 기준을 확인하거나 평가계획 PDF를 업로드합니다.</p><button class="text-btn" data-go="reference">가능 점수 보기 <span>→</span></button></div>
+<div class="step-card"><div class="step-count">01</div><h3>평가계획 확인</h3><p>3종의 2026년 평가계획 중 학년·과정을 선택하거나 다른 평가계획 PDF를 업로드합니다.</p><button class="text-btn" data-go="reference">가능 점수 보기 <span>→</span></button></div>
 <div class="step-card"><div class="step-count">02</div><h3>일람표 읽기</h3><p>수행평가 일람표 PDF를 넣고 점수 열과 평가 영역의 대응을 확인합니다.</p><button class="text-btn" data-go="verify">일람표 검증하기 <span>→</span></button></div>
 <div class="step-card"><div class="step-count">03</div><h3>오류 확인·저장</h3><p>정상·오류 의심·판독 확인을 구분하고 익명 CSV로 결과를 저장합니다.</p><button class="text-btn" data-go="guide">검증 방식 알아보기 <span>→</span></button></div>
 </div>
@@ -51,7 +51,7 @@
 </section>
 <section id="reference" class="page">
 <div class="section-top"><div><div class="eyebrow">EVALUATION PLAN</div><h1>평가계획 · 가능한 점수</h1><p class="section-desc">학과 → 과목 → 평가 영역을 선택하면 해당 영역에서 실제 만들 수 있는 합계 점수를 보여줍니다.</p></div><button id="download-reference" class="btn secondary">기준 전체 CSV 저장</button></div>
-<div class="upload-strip"><div class="upload-mark">PDF</div><div class="upload-copy"><b>평가계획 PDF 불러오기</b><small>2026학년도 원본은 즉시 적용합니다. 다른 학기·과목의 평가계획은 배점표를 분석해 보여주며, 원문 확인 후 승인한 영역만 검증에 적용합니다.</small></div><label class="btn outline" for="plan-input">PDF 선택</label><input id="plan-input" type="file" accept=".pdf,application/pdf" hidden></div>
+<div class="upload-strip"><div class="upload-mark">PDF</div><div class="upload-copy"><b>평가계획 PDF 불러오기</b><small>2026학년도 평가계획 3종의 원본은 즉시 적용합니다. 그 밖의 문서는 검토 후 승인된 기준만 적용합니다.</small></div><label class="btn outline" for="plan-input">PDF 선택</label><input id="plan-input" type="file" accept=".pdf,application/pdf" hidden></div>
 <div id="plan-status" class="helper"></div>
 <div class="filter-row"><label>학과<select id="dept-select" aria-label="학과"></select></label><label>과목<select id="subject-select" aria-label="과목"></select></label><label>수행평가 영역<select id="area-select" aria-label="영역"></select></label></div>
 <div id="area-details" class="details"><div class="empty">영역을 선택해 주세요.</div></div>
