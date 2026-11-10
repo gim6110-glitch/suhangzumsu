@@ -44,7 +44,7 @@ function sgCropColumn(canvas,g,col,scale=2.7){
 function sgTSV(t){return String(t||"").trim().split(/\r?\n/).slice(1).map(l=>l.split("\t")).filter(a=>a.length>=12&&a[0]==="5").map(a=>({text:a.slice(11).join("\t").trim(),conf:Number(a[10]),top:Number(a[7]),h:Number(a[9])})).filter(a=>a.text)}
 async function sgGetOCR(){if(!window.Tesseract)throw Error("OCR 라이브러리가 연결되지 않았습니다. 광고차단·학교망 CDN 차단을 확인하세요.");if(!sg2.worker){sg2.worker=await Tesseract.createWorker("eng",1);await sg2.worker.setParameters({tessedit_char_whitelist:"0123456789.,",tessedit_pageseg_mode:Tesseract.PSM.SINGLE_BLOCK,preserve_interword_spaces:"1"})}return sg2.worker}
 async function sgGetHeaderOCR(){if(!window.Tesseract)return null;try{if(!sg2.headerWorker){sg2.headerWorker=await Tesseract.createWorker("kor",1);await sg2.headerWorker.setParameters({tessedit_pageseg_mode:Tesseract.PSM.SINGLE_BLOCK})}return sg2.headerWorker}catch(e){console.warn("Korean header OCR unavailable",e);return null}}
-async function sgHeaderSubject(canvas){try{const worker=await sgGetHeaderOCR();if(!worker)return null;const c=document.createElement("canvas");c.width=canvas.width;c.height=Math.round(canvas.height*.17);const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="white";x.fillRect(0,0,c.width,c.height);x.drawImage(canvas,0,0,Math.round(canvas.width*.79),c.height,0,0,Math.round(canvas.width*.79),c.height);const {data}=await worker.recognize(c);return matchSubject(data.text||"")}catch(e){console.warn("Header detection",e);return null}}
+async function sgHeaderSubject(canvas){try{const worker=await sgGetHeaderOCR();if(!worker)return null;const c=document.createElement("canvas");c.width=canvas.width;c.height=Math.round(canvas.height*.205);const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="white";x.fillRect(0,0,c.width,c.height);x.drawImage(canvas,0,0,Math.round(canvas.width*.77),c.height,0,0,Math.round(canvas.width*.77),c.height);const {data}=await worker.recognize(c);return matchSubject(data.text||"")}catch(e){console.warn("Header detection",e);return null}}
 function sgValueAt(row,col){return row.entries[col]?.value??null}
 function sgGuessStudentEnd(rows,cols){if(rows.length<=3)return rows.length;let summary=rows.length;
  for(let i=2;i<rows.length;i++){const vals=cols.map(c=>sgValueAt(rows[i],c)).filter(v=>v!==null);if(vals.length<2)continue;
@@ -89,8 +89,7 @@ async function scanFiles(files){
      $("processing-detail").textContent="파일 "+(fi+1)+" · "+pi+"쪽 점수 열 판독 중";
      const found=await sgOcrGrid(canvas,grid,t=>{$("processing-detail").textContent="파일 "+(fi+1)+" · "+pi+"쪽: "+t});
      let subject=pdfSubject;
-     if(!subject&&pi===1)subject=await sgHeaderSubject(canvas);
-     if(!subject){const prev=state.scans.filter(s=>s.sourceIndex===fi).at(-1);if(prev&&prev.subject&&prev.page===pi-1)subject=prev.subject}
+     if(!subject)subject=await sgHeaderSubject(canvas);
      state.scans.push({...found,sourceIndex:fi,fileName:f.name,page:pi,subject,readOk:true});
      successful++;
     }catch(e){failed.push({file:fi+1,page:pi,reason:e.message});state.scans.push({sourceIndex:fi,fileName:f.name,page:pi,rows:[],cols:[],grid:null,subject:null,readOk:false,readError:e.message});console.warn("Page read failed",fi+1,pi,e.message)}
