@@ -16,5 +16,8 @@ jobs:
           node --check app.js
           node --check scanner-v2.js
           node --check plan-import-v2.js
+          node --check scoreguard-v3.js
       - name: Reference data and table scan
-        run: node tests/verify.mjs
+        run: |
+          node tests/verify.mjs
+          node tests/v3-safety.mjs
