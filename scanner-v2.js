@@ -121,7 +121,7 @@ function sgControlBar(){let el=$("sg-multipage");if(el)return el;
  return el
 }
 function sgApplyStudentCount(){const scan=state.scans[state.activePage];if(!scan?.allRows)return;const n=Number($("sg-student-count").value);if(!Number.isInteger(n)||n<1||n>scan.allRows.length){toast("1~"+scan.allRows.length+" 사이의 행 수를 입력하세요.");return}scan.rows=scan.allRows.slice(0,n).map((r,i)=>({...r,studentRow:i+1}));scan.rowsManuallySet=true;showScan();toast("학생 점수 행 "+n+"개로 적용했습니다.")}
-function sgCopyMappings(){const s=state.scans[state.activePage];if(!s?.readOk)return;const mapping=sgMapping().filter(m=>m.areaId!=="__TOTAL__"||m.areaId==="__TOTAL__");if(!mapping.length){toast("먼저 점수 열을 연결하세요.");return}s.savedMapping=mapping;s.subject={department:$("verify-dept").value,subject:$("verify-subject").value};let count=0;for(const other of state.scans){if(other===s||!other.readOk||other.cols.length!==s.cols.length)continue;const same=other.subject&&other.subject.department===s.subject.department&&other.subject.subject===s.subject.subject;if(!same)continue;const indexMapping=mapping.map(m=>{const ix=s.cols.indexOf(m.col);return {col:other.cols[ix],areaId:m.areaId}});if(indexMapping.some(x=>x.col===undefined))continue;other.savedMapping=indexMapping;count++}toast("동일 학과·과목에 "+count+"쪽의 점수 열 연결을 복사했습니다.")}
+function sgCopyMappings(){const s=state.scans[state.activePage];if(!s?.readOk)return;const mapping=sgMapping().filter(m=>m.areaId!=="__TOTAL__"||m.areaId==="__TOTAL__");if(!s.scope){toast("먼저 학년·과정 평가계획을 선택하세요.");return}if(!mapping.length){toast("먼저 점수 열을 연결하세요.");return}s.savedMapping=mapping;s.subject={department:$("verify-dept").value,subject:$("verify-subject").value};let count=0;for(const other of state.scans){if(other===s||!other.readOk||other.cols.length!==s.cols.length)continue;const same=other.scope===s.scope&&other.subject&&other.subject.department===s.subject.department&&other.subject.subject===s.subject.subject;if(!same)continue;const indexMapping=mapping.map(m=>{const ix=s.cols.indexOf(m.col);return {col:other.cols[ix],areaId:m.areaId}});if(indexMapping.some(x=>x.col===undefined))continue;other.savedMapping=indexMapping;count++}toast("동일 학과·과목에 "+count+"쪽의 점수 열 연결을 복사했습니다.")}
 async function sgPreviewScores(){
  const s=state.scans[state.activePage];if(!s?.readOk||!s.grid){toast("이 페이지의 점수 칸이 아직 분석되지 않았습니다.");return}
  try{
@@ -136,13 +136,32 @@ async function sgPreviewScores(){
  }catch(e){toast("미리보기 실패: "+e.message)}
 }
 function sgTurn(delta){if(!state.scans.length)return;state.activePage=Math.min(state.scans.length-1,Math.max(0,state.activePage+delta));$("verify-page").value=String(state.activePage);showScan()}
+function sgAreasForScan(scan){return state.referenceSources?.[scan?.scope]?.areas||[]}
+function sgRefreshSubjectForPage(){
+ const scan=state.scans[state.activePage];if(!scan?.readOk||!scan.scope)return;
+ const pool=sgAreasForScan(scan);
+ const subjects=[...new Set(pool.filter(x=>x.department===$("verify-dept").value).map(x=>x.subject))];
+ const selected=scan.subject?.subject;
+ options($("verify-subject"),subjects,subjects.includes(selected)?selected:subjects[0]);
+ scan.savedMapping=[];renderMappings();
+}
+function sgRefreshVerifyControls(){
+ const scan=state.scans[state.activePage];if(!scan?.readOk)return;
+ const pool=sgAreasForScan(scan);
+ if(!pool.length){options($("verify-dept"),[]);options($("verify-subject"),[]);$("column-mapping").innerHTML='<p class="muted">이 페이지에 적용할 학년·과정 평가계획을 먼저 선택하세요.</p>';return}
+ const depts=[...new Set(pool.map(x=>x.department))];const desired=scan.subject?.department;
+ options($("verify-dept"),depts,depts.includes(desired)?desired:depts[0]);
+ const subjects=[...new Set(pool.filter(x=>x.department===$("verify-dept").value).map(x=>x.subject))];
+ options($("verify-subject"),subjects,subjects.includes(scan.subject?.subject)?scan.subject.subject:subjects[0]);
+ renderMappings();
+}
 function showScan(){const scan=state.scans[state.activePage];if(!scan)return;sgControlBar();$("scan-info").textContent="파일 "+(scan.sourceIndex+1)+" / PDF "+scan.page+"쪽"+(scan.readOk?" · 학생 행 "+scan.rows.length+"개 · 숫자 열 "+scan.cols.length+"개":" · 판독 실패: "+scan.readError);
  if(!scan.readOk){$("column-mapping").innerHTML='<div class="notice neutral">이 페이지의 점수를 읽지 못했습니다. 선명한 파일로 다시 스캔하거나 원본에서 직접 확인해 주세요.</div>';$("run-verification").disabled=true;return}
  $("run-verification").disabled=false;
- if(scan.subject){$("verify-dept").value=scan.subject.department;refreshVerifySubject();$("verify-subject").value=scan.subject.subject}
- renderMappings();$("verify-page").value=String(state.activePage);const countEl=$("sg-student-count");if(countEl){countEl.max=String(scan.allRows?.length||scan.rows.length);countEl.value=String(scan.rows.length)}
+ $("verify-scope").value=scan.scope||"";
+ sgRefreshVerifyControls();$("verify-page").value=String(state.activePage);const countEl=$("sg-student-count");if(countEl){countEl.max=String(scan.allRows?.length||scan.rows.length);countEl.value=String(scan.rows.length)}
 }
-function renderMappings(){const scan=state.scans[state.activePage];if(!scan?.readOk)return;const dept=$("verify-dept").value,subject=$("verify-subject").value;const areas=bySubject(dept,subject);
+function renderMappings(){const scan=state.scans[state.activePage];if(!scan?.readOk)return;const dept=$("verify-dept").value,subject=$("verify-subject").value;const areas=sgAreasForScan(scan).filter(a=>a.department===dept&&a.subject===subject);
  const boxes=scan.cols.map((col,i)=>{const samples=scan.rows.map(r=>r.entries[col]?.value).filter(n=>n!==null).slice(0,6);const sel=(scan.savedMapping||[]).find(m=>m.col===col);
  return '<div class="mapping-card"><label>점수 열 '+(i+1)+' <select data-mapcol="'+col+'"><option value="">검증 제외 (소계/합계/불필요 열)</option>'+areas.map(a=>'<option value="'+escaped(a.id)+'" '+(sel?.areaId===a.id?"selected":"")+'>'+escaped(a.area)+' ('+a.max+'점)</option>').join("")+'<option value="__TOTAL__" '+(sel?.areaId==="__TOTAL__"?"selected":"")+'>전체 합계 열 (산술검증)</option></select></label><div class="hint">판독 예: '+escaped(samples.join(", ")||"인식 실패")+' · 자동 매핑하지 않음</div></div>'}).join("");
  $("column-mapping").innerHTML=boxes+(scan.ocrWarnings?.length?'<p class="muted">'+escaped(scan.ocrWarnings.join(" · "))+'</p>':"");
@@ -150,6 +169,7 @@ function renderMappings(){const scan=state.scans[state.activePage];if(!scan?.rea
 }
 function sgMapping(){return [...document.querySelectorAll("[data-mapcol]")].map(e=>({col:Number(e.dataset.mapcol),areaId:e.value})).filter(m=>m.areaId)}
 function sgValidatePage(scan,mapping){
+ if(!scan.scope||!state.referenceSources?.[scan.scope])throw Error("해당 PDF 페이지의 학년·과정 기준을 선택하지 않았습니다.");
  const ids=mapping.filter(m=>m.areaId!=="__TOTAL__").map(m=>m.areaId);
  if(!ids.length)throw Error("영역 점수 열을 한 개 이상 선택하세요.");
  if(new Set(ids).size!==ids.length)throw Error("같은 영역이 여러 점수 열에 중복 연결됐습니다.");
@@ -157,16 +177,16 @@ function sgValidatePage(scan,mapping){
   const values={};for(const m of mapping){values[m.areaId]=row.entries[m.col]?.value??null}
   for(const m of mapping){
    if(m.areaId==="__TOTAL__")continue;
-   const area=state.areas.find(a=>a.id===m.areaId);if(!area)continue;
+   const area=sgAreasForScan(scan).find(a=>a.id===m.areaId);if(!area)continue;
    const entry=row.entries[m.col];const score=entry?.value??null;let assessment=validation(area,score);
    if(entry&&Number.isFinite(entry.confidence)&&entry.confidence<75&&assessment.kind==="ok")assessment={status:"판독 확인",kind:"review",reason:"OCR 확신도 "+Math.round(entry.confidence)+"%: 원문 숫자를 확인해야 합니다."};
-   results.push({file:scan.sourceIndex+1,page:scan.page,row:row.studentRow,areaId:area.id,area:area.area,department:area.department,subject:area.subject,value:score,max:area.max,raw:entry?.raw||"",confidence:entry?.confidence??null,status:assessment.status,kind:assessment.kind,reason:assessment.reason,col:m.col})
+   results.push({scope:scan.scope,file:scan.sourceIndex+1,page:scan.page,row:row.studentRow,areaId:area.id,area:area.area,department:area.department,subject:area.subject,value:score,max:area.max,raw:entry?.raw||"",confidence:entry?.confidence??null,status:assessment.status,kind:assessment.kind,reason:assessment.reason,col:m.col})
   }
-  const total=mapping.find(m=>m.areaId==="__TOTAL__");if(total){const actual=row.entries[total.col]?.value??null;const scores=mapping.filter(m=>m.areaId!=="__TOTAL__").map(m=>row.entries[m.col]?.value??null);if(actual!==null&&scores.every(Number.isFinite)){const sum=scores.reduce((a,b)=>a+b,0);let d=Math.round((actual-sum)*100)/100;const ok=Math.abs(d)<.011;results.push({file:scan.sourceIndex+1,page:scan.page,row:row.studentRow,areaId:"__TOTAL__",area:"전체 합계 검산",department:scan.subject?.department||"",subject:scan.subject?.subject||"",value:actual,max:"—",raw:row.entries[total.col]?.raw||"",status:ok?"정상":"합계 확인",kind:ok?"ok":"review",reason:ok?"선택 영역 합계와 일치":"기록 합계 "+actual+"점, 선택 영역 합계 "+sum+"점. 소계 포함 여부 확인",col:total.col})}}
+  const total=mapping.find(m=>m.areaId==="__TOTAL__");if(total){const actual=row.entries[total.col]?.value??null;const scores=mapping.filter(m=>m.areaId!=="__TOTAL__").map(m=>row.entries[m.col]?.value??null);if(actual!==null&&scores.every(Number.isFinite)){const sum=scores.reduce((a,b)=>a+b,0);let d=Math.round((actual-sum)*100)/100;const ok=Math.abs(d)<.011;results.push({scope:scan.scope,file:scan.sourceIndex+1,page:scan.page,row:row.studentRow,areaId:"__TOTAL__",area:"전체 합계 검산",department:scan.subject?.department||"",subject:scan.subject?.subject||"",value:actual,max:"—",raw:row.entries[total.col]?.raw||"",status:ok?"정상":"합계 확인",kind:ok?"ok":"review",reason:ok?"선택 영역 합계와 일치":"기록 합계 "+actual+"점, 선택 영역 합계 "+sum+"점. 소계 포함 여부 확인",col:total.col})}}
  }
  return results
 }
-function verify(){try{const scan=state.scans[state.activePage];if(!scan?.readOk)throw Error("이 페이지는 점수 판독에 실패했습니다.");const mapping=sgMapping();scan.savedMapping=mapping;scan.subject={department:$("verify-dept").value,subject:$("verify-subject").value};state.verification=sgValidatePage(scan,mapping);$("export-results").disabled=!state.verification.length;refreshStats();renderVerification();toast("해당 페이지 "+state.verification.length+"건 점수 검증 완료")}catch(e){toast(e.message)}}
+function verify(){try{const scan=state.scans[state.activePage];if(!scan?.readOk)throw Error("이 페이지는 점수 판독에 실패했습니다.");const mapping=sgMapping();if(!scan.scope)throw Error("이 페이지의 평가계획을 먼저 선택하세요.");scan.savedMapping=mapping;scan.subject={department:$("verify-dept").value,subject:$("verify-subject").value};state.verification=sgValidatePage(scan,mapping);$("export-results").disabled=!state.verification.length;refreshStats();renderVerification();toast("해당 페이지 "+state.verification.length+"건 점수 검증 완료")}catch(e){toast(e.message)}}
 function sgVerifyAll(){let collected=[],missed=[];for(const s of state.scans){if(!s.readOk){missed.push({file:s.sourceIndex+1,page:s.page,reason:s.readError});continue}if(!s.savedMapping?.some(x=>x.areaId!=="__TOTAL__")){missed.push({file:s.sourceIndex+1,page:s.page,reason:"영역 연결 미확인"});continue}try{collected.push(...sgValidatePage(s,s.savedMapping))}catch(e){missed.push({file:s.sourceIndex+1,page:s.page,reason:e.message})}}
  state.verification=collected;state.unverifiedPages=missed;$("export-results").disabled=!collected.length;refreshStats();renderVerification();const el=$("sg-scan-errors");el.textContent="전체 페이지 중 검증 완료 "+state.scans.length+"쪽, 보류 "+missed.length+"쪽 ("+missed.slice(0,5).map(x=>x.file+"번 파일 "+x.page+"쪽: "+x.reason).join(" / ")+")";toast("검증 "+collected.length+"건 · 미검증 페이지 "+missed.length+"쪽")}
 function renderVerification(){const data=state.verification;const count={ok:0,error:0,review:0};for(const r of data)count[r.kind]=(count[r.kind]||0)+1;$("verification-summary").innerHTML='<div class="summary-item">점수 검증<b>'+fmt(data.length)+'</b></div><div class="summary-item">정상<b>'+fmt(count.ok)+'</b></div><div class="summary-item">오류 의심<b>'+fmt(count.error)+'</b></div><div class="summary-item">확인 필요<b>'+fmt(count.review)+'</b></div>';
@@ -174,5 +194,5 @@ function renderVerification(){const data=state.verification;const count={ok:0,er
  $("verification-body").innerHTML=shown.slice(0,1500).map(r=>'<tr><td>파일 '+r.file+' / '+r.page+'쪽 / '+r.row+'행</td><td>'+escaped(r.area)+'</td><td><input class="input-score '+(r.kind==="ok"?"":"flag")+'" data-result-index="'+data.indexOf(r)+'" type="number" step="0.01" min="0" value="'+(r.value??"")+'"></td><td>'+r.max+'</td><td><span class="status '+r.kind+'">'+escaped(r.status)+'</span></td><td style="white-space:normal;min-width:200px">'+escaped(r.reason)+'</td></tr>').join("")||'<tr><td class="empty" colspan="6">검증할 기록이 없습니다.</td></tr>';
  if(shown.length>1500){const note=document.createElement("p");note.className="muted";note.textContent="화면은 처음 1,500건만 표시합니다. 전체 기록은 CSV로 저장하세요.";$("verification-body").parentElement.after(note)}
 }
-function exportResults(){if(!state.verification.length){toast("검증된 기록이 없습니다.");return}downloadCSV("수행평가_익명_검증결과.csv",["파일번호","PDF쪽","학생행번호","학과","과목","영역","점수","만점","OCR신뢰도","판정","사유"],state.verification.map(r=>[r.file,r.page,r.row,r.department,r.subject,r.area,r.value??"",r.max,r.confidence??"",r.status,r.reason]));toast("개인정보를 포함하지 않는 CSV를 저장했습니다.")}
-document.addEventListener("DOMContentLoaded",()=>{$("verify-dept").addEventListener("change",()=>{const s=state.scans[state.activePage];if(s?.readOk)s.savedMapping=[]});$("verify-subject").addEventListener("change",()=>{const s=state.scans[state.activePage];if(s?.readOk)s.savedMapping=[]});});
+function exportResults(){if(!state.verification.length){toast("검증된 기록이 없습니다.");return}downloadCSV("수행평가_익명_검증결과.csv",["평가기준","파일번호","PDF쪽","학생행번호","학과","과목","영역","점수","만점","OCR신뢰도","판정","사유"],state.verification.map(r=>[r.scope,r.file,r.page,r.row,r.department,r.subject,r.area,r.value??"",r.max,r.confidence??"",r.status,r.reason]));toast("개인정보를 포함하지 않는 CSV를 저장했습니다.")}
+document.addEventListener("DOMContentLoaded",()=>{$("verify-scope").addEventListener("change",e=>{const scan=state.scans[state.activePage];if(!scan)return;scan.scope=e.target.value;scan.subject=null;scan.savedMapping=[];sgRefreshVerifyControls()});$("verify-dept").addEventListener("change",()=>{const s=state.scans[state.activePage];if(s?.readOk)s.savedMapping=[]});$("verify-subject").addEventListener("change",()=>{const s=state.scans[state.activePage];if(s?.readOk)s.savedMapping=[]});});
