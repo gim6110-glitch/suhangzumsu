@@ -211,3 +211,66 @@ document.addEventListener("DOMContentLoaded",()=>{sg3HelpUI();
  if(picker)picker.addEventListener("change",()=>{const s=state.scans[state.activePage];if(s){s.reviewed=false;if(!s.readOk)s.scope=picker.value}});
  const rows=$("verification-body");if(rows)rows.addEventListener("change",()=>{});
 });
+
+
+/* Network fallbacks: static site remains usable if the first CDN is unavailable. */
+async function sg3LoadScript(candidates,available){
+ if(available())return;
+ const attempted=[];
+ for(const src of candidates){
+  try{
+   await new Promise((resolve,reject)=>{
+    const tag=document.createElement("script");tag.src=src;tag.async=true;
+    tag.onload=()=>available()?resolve():reject(Error("라이브러리가 초기화되지 않았습니다"));
+    tag.onerror=()=>reject(Error("스크립트 연결 실패"));
+    document.head.appendChild(tag)
+   });return
+  }catch(e){attempted.push(src);console.warn("라이브러리 대체 경로 시도:",src,e.message)}
+ }
+ throw Error("PDF/OCR 라이브러리를 불러오지 못했습니다. 학교망 차단 여부를 확인하거나 'PDF 없이 점수표 입력'을 사용하세요.");
+}
+const sg3OldGetPDFJS=getPDFJS;
+getPDFJS=async function(){
+ await sg3LoadScript([
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js",
+  "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"
+ ],()=>!!window.pdfjsLib);
+ return await sg3OldGetPDFJS()
+};
+const sg3OldOpenPDF=openPDF;
+openPDF=async function(f){
+ try{return await sg3OldOpenPDF(f)}
+ catch(err){
+  if(!window.pdfjsLib)throw err;
+  pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  try{return await sg3OldOpenPDF(f)}catch{throw err}
+ }
+};
+async function sg3EnsureTesseract(){
+ return sg3LoadScript([
+  "https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"
+ ],()=>!!window.Tesseract)
+}
+const sg3OldGetOCR=sgGetOCR;
+sgGetOCR=async function(){await sg3EnsureTesseract();return sg3OldGetOCR()};
+const sg3OldGetHeaderOCR=sgGetHeaderOCR;
+sgGetHeaderOCR=async function(){await sg3EnsureTesseract();return sg3OldGetHeaderOCR()};
+const sg3OldPlanOCR=sgPlanOCR;
+sgPlanOCR=async function(page){await sg3EnsureTesseract();return sg3OldPlanOCR(page)};
+function sg3StartWithoutPDF(){
+ if(!state.referenceSources?.grade2){toast("평가계획 기준을 먼저 불러와야 합니다.");return}
+ state.scans=[{sourceIndex:0,page:1,fileName:"직접 입력",rows:[],cols:[],readOk:false,readError:"PDF 없이 작성한 점수표입니다.",scope:"",subject:null}];
+ state.pdfs=[];state.verification=[];state.activePage=0;
+ $("scan-result").hidden=false;
+ $("export-results").disabled=false;
+ options($("verify-page"),[{value:"0",label:"직접 입력 1쪽"}]);
+ showScan();$("sg3-manual").scrollIntoView({behavior:"smooth",block:"center"});
+ toast("이 페이지의 평가계획을 선택한 뒤 행·열 수를 지정하세요.");
+}
+document.addEventListener("DOMContentLoaded",()=>{
+ const button=document.createElement("button");button.id="sg3-no-pdf";button.className="btn secondary";
+ button.textContent="PDF 분석이 안 될 때 · 점수표 직접 입력";
+ button.onclick=sg3StartWithoutPDF;
+ $("sheet-drop").insertAdjacentElement("afterend",button);
+});
