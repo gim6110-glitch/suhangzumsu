@@ -56,7 +56,20 @@ if(xs.length<5)throw Error("표의 세로 열을 구분하지 못했습니다. �
 const gaps=xs.slice(1).map((x,i)=>x-xs[i]).filter(x=>x>12).sort((a,b)=>a-b),pitch=gaps[Math.floor(gaps.length/2)]||50;const filled=[xs[0]];for(let i=1;i<xs.length;i++){const cur=xs[i],prev=filled.at(-1);if(cur-prev>pitch*2.2){const n=Math.round(cur/pitch-prev/pitch)-1;for(let j=1;j<=Math.min(n,3);j++)filled.push(Math.round(prev+j*(cur-prev)/(n+1)))}filled.push(cur)}xs=filled;
 return {xs,ys:bestRun,w,h,pitch,y0,y1}
 }
-function matchSubject(text){const n=norm(text);let best=null,max=0;for(const k of [...new Set(state.areas.map(a=>areaKey(a)))] ){const [d,s]=k.split(" / ");let points=0;if(n.includes(norm(s)))points+=20+norm(s).length;if(n.includes(norm(d)))points+=12;if(points>max){max=points;best={department:d,subject:s}}}return max>=20?best:null}
+function matchSubject(text){
+ const original=String(text||"");
+ const match=original.match(/교\s*과\s*목\s*[:：]\s*([^(\n]{1,100})/);
+ if(!match)return null;
+ const title=norm(match[1]);
+ const all=[...new Map(state.areas.map(a=>[areaKey(a),{department:a.department,subject:a.subject}])).values()];
+ const hits=all.filter(a=>title.includes(norm(a.subject))).sort((a,b)=>norm(b.subject).length-norm(a.subject).length);
+ if(!hits.length)return null;
+ const best=hits.filter(a=>norm(a.subject).length===norm(hits[0].subject).length);
+ if(best.length===1)return best[0];
+ const prefix=norm(original.slice(0,match.index));
+ const withDepartment=best.filter(a=>prefix.includes(norm(a.department)));
+ return withDepartment.length===1?withDepartment[0]:null
+}
 async function maybePageHeader(page){try{const t=(await page.getTextContent()).items.map(x=>x.str).join(" ");return matchSubject(t)}catch{return null}}
 function extractCanvasCell(canvas,rect){const sx=Math.max(0,Math.round(rect.x0)+3),sy=Math.max(0,Math.round(rect.y0)+3),ex=Math.min(canvas.width,Math.round(rect.x1)-3),ey=Math.min(canvas.height,Math.round(rect.y1)-3);const c=document.createElement("canvas");c.width=Math.max(2,(ex-sx)*2);c.height=Math.max(2,(ey-sy)*2);const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(canvas,sx,sy,Math.max(ex-sx,1),Math.max(ey-sy,1),0,0,c.width,c.height);const img=x.getImageData(0,0,c.width,c.height);for(let i=0;i<img.data.length;i+=4){const g=.299*img.data[i]+.587*img.data[i+1]+.114*img.data[i+2];const v=g<155?0:255;img.data[i]=img.data[i+1]=img.data[i+2]=v}x.putImageData(img,0,0);return c}
 function parseNumber(s){const raw=String(s||"").replace(/\s/g,"").replace(/,/g,".");if(!raw||/[^0-9.]/.test(raw))return null;const m=raw.match(/^\d{1,3}(?:\.\d{1,2})?$/);return m?Number(raw):null}
