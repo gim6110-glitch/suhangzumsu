@@ -36,6 +36,8 @@ scanFiles=async function(files){
  }
  SG3.sampleMatches=count;
  if(state.scans.length){
+   $("scan-result").hidden=false;
+   $("processing").hidden=true;
    $("export-results").disabled=false;
    state.activePage=Math.max(0,state.scans.findIndex(s=>s.readOk));
    if($("verify-page"))$("verify-page").value=String(state.activePage);
