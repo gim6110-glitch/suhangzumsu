@@ -48,8 +48,10 @@ try{
  console.log("SCAN_DEBUG",JSON.stringify(diag));
  assert.equal(scan.length,1);
  assert(scan[0].readOk,"Synthetic PDF OCR should succeed: "+scan[0].err);
- assert(scan[0].rows>=6,"Too few recognized rows: "+scan[0].rows);
+ assert.equal(scan[0].rows,8,"Expected exactly 8 student rows, not header/summary rows: "+scan[0].rows);
  assert(scan[0].cols>=2,"Too few OCR score columns");
+ const values=diag.rows.flatMap(r=>r.entries.map(([c,v])=>v));
+ assert(values.includes(30)&&values.includes(20)&&values.includes(50),"Expected real numeric scores were not recognized");
  assert.equal(errors.length,0,"Uncaught browser errors: "+JSON.stringify(errors));
  console.log("PASS: Synthetic image-only PDF -> in-browser numeric OCR and row mapping");
 }finally{if(browser)await browser.close();server.kill("SIGTERM")}
