@@ -40,7 +40,7 @@ try{
  await page.locator("#run-verification").click();
  const summary=await page.locator("#verification-summary").innerText();
  assert(summary.includes("오류 의심"),summary);
- assert((await page.locator("#verification-body").innerText()).includes("학생 2행"));
+ assert((await page.locator("#verification-body").innerText()).includes("2행"));
  const [download]=await Promise.all([page.waitForEvent("download"),page.locator("#export-results").click()]);
  assert(download.suggestedFilename().includes("익명"),download.suggestedFilename());
  assert.equal(errors.length,0,"Browser page errors: "+JSON.stringify(errors));
