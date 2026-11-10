@@ -108,17 +108,31 @@ async function scanFiles(files){
 }
 function sgRefreshPageSelect(){options($("verify-page"),state.scans.map((s,i)=>({value:String(i),label:"파일 "+(s.sourceIndex+1)+" / "+s.page+"쪽"+(s.readOk?" · "+s.rows.length+"행":" · 판독 실패")})));$("verify-page").value=String(state.activePage)}
 function sgControlBar(){let el=$("sg-multipage");if(el)return el;
- el=document.createElement("div");el.id="sg-multipage";el.className="details";el.innerHTML='<div class="actions"><button class="btn secondary" id="sg-prev">← 이전 페이지</button><button class="btn secondary" id="sg-next">다음 페이지 →</button><button class="btn primary" id="sg-verify-all">매핑 확인된 모든 페이지 검증</button><button class="btn secondary" id="sg-export-mapping">기준 연결표 CSV</button></div><div class="actions"><label class="check">학생 점수 행 수 <input id="sg-student-count" type="number" min="1" max="200" style="width:75px;padding:8px;border:1px solid #ccdce9;border-radius:8px"></label><button class="btn secondary" id="sg-apply-count">학생 행 수 적용</button><button class="btn secondary" id="sg-copy-mapping">동일 과목·동일 열 구조에 매핑 적용</button></div><p id="sg-scan-errors" class="muted"></p><p class="muted">일람표는 파일마다 과목이 다를 수 있습니다. 각 페이지에서 영역 연결을 확인한 뒤 검증하세요. 누락되거나 판독이 불분명한 페이지는 ‘확인 필요’로 남깁니다.</p>';
+ el=document.createElement("div");el.id="sg-multipage";el.className="details";el.innerHTML='<div class="actions"><button class="btn secondary" id="sg-prev">← 이전 페이지</button><button class="btn secondary" id="sg-next">다음 페이지 →</button><button class="btn primary" id="sg-verify-all">매핑 확인된 모든 페이지 검증</button><button class="btn secondary" id="sg-export-mapping">기준 연결표 CSV</button></div><div class="actions"><label class="check">학생 점수 행 수 <input id="sg-student-count" type="number" min="1" max="200" style="width:75px;padding:8px;border:1px solid #ccdce9;border-radius:8px"></label><button class="btn secondary" id="sg-apply-count">학생 행 수 적용</button><button class="btn secondary" id="sg-copy-mapping">동일 과목·동일 열 구조에 매핑 적용</button><button class="btn secondary" id="sg-preview-score">숫자 열만 미리보기</button></div><p id="sg-scan-errors" class="muted"></p><p class="muted">일람표는 파일마다 과목이 다를 수 있습니다. 각 페이지에서 영역 연결을 확인한 뒤 검증하세요. 누락되거나 판독이 불분명한 페이지는 ‘확인 필요’로 남깁니다.</p>';
  $("scan-result").insertBefore(el,$("scan-result").children[1]);
  el.querySelector("#sg-prev").onclick=()=>sgTurn(-1);el.querySelector("#sg-next").onclick=()=>sgTurn(1);
  el.querySelector("#sg-verify-all").onclick=sgVerifyAll;
  el.querySelector("#sg-apply-count").onclick=sgApplyStudentCount;
  el.querySelector("#sg-copy-mapping").onclick=sgCopyMappings;
+ el.querySelector("#sg-preview-score").onclick=sgPreviewScores;
  el.querySelector("#sg-export-mapping").onclick=()=>downloadCSV("수행평가_페이지별_영역연결_익명.csv",["파일번호","쪽","판독상태","학과","과목","영역ID","점수열"],state.scans.flatMap(s=>!s.readOk?[[s.sourceIndex+1,s.page,"실패", "","", "", ""]]: (s.savedMapping||[]).map(m=>[s.sourceIndex+1,s.page,"완료",s.subject?.department||"",s.subject?.subject||"",m.areaId,m.col])));
  return el
 }
 function sgApplyStudentCount(){const scan=state.scans[state.activePage];if(!scan?.allRows)return;const n=Number($("sg-student-count").value);if(!Number.isInteger(n)||n<1||n>scan.allRows.length){toast("1~"+scan.allRows.length+" 사이의 행 수를 입력하세요.");return}scan.rows=scan.allRows.slice(0,n).map((r,i)=>({...r,studentRow:i+1}));scan.rowsManuallySet=true;showScan();toast("학생 점수 행 "+n+"개로 적용했습니다.")}
 function sgCopyMappings(){const s=state.scans[state.activePage];if(!s?.readOk)return;const mapping=sgMapping().filter(m=>m.areaId!=="__TOTAL__"||m.areaId==="__TOTAL__");if(!mapping.length){toast("먼저 점수 열을 연결하세요.");return}s.savedMapping=mapping;s.subject={department:$("verify-dept").value,subject:$("verify-subject").value};let count=0;for(const other of state.scans){if(other===s||!other.readOk||other.cols.length!==s.cols.length)continue;const same=other.subject&&other.subject.department===s.subject.department&&other.subject.subject===s.subject.subject;if(!same)continue;const indexMapping=mapping.map(m=>{const ix=s.cols.indexOf(m.col);return {col:other.cols[ix],areaId:m.areaId}});if(indexMapping.some(x=>x.col===undefined))continue;other.savedMapping=indexMapping;count++}toast("동일 학과·과목에 "+count+"쪽의 점수 열 연결을 복사했습니다.")}
+async function sgPreviewScores(){
+ const s=state.scans[state.activePage];if(!s?.readOk||!s.grid){toast("이 페이지의 점수 칸이 아직 분석되지 않았습니다.");return}
+ try{
+ const doc=state.pdfs[s.sourceIndex],page=await doc.getPage(s.page),canvas=await pdfPageCanvas(page,2.2);
+ const g=s.grid;const x0=Math.max(0,Math.floor(g.xs[g.cols[0]]+2)),x1=Math.min(canvas.width,Math.ceil(g.xs.at(-1)-2)),y0=Math.max(0,g.ys[0]),y1=Math.min(canvas.height,g.ys.at(-1));
+ if(x1<=x0||y1<=y0)throw Error("안전한 숫자 열 범위를 표시할 수 없습니다.");
+ let box=$("sg-score-preview");if(!box){box=document.createElement("div");box.id="sg-score-preview";box.className="details";$("column-mapping").insertAdjacentElement("afterend",box)}
+ box.innerHTML='<h3>개인정보를 제외한 점수 열 확인</h3><p class="muted">원본 PDF에서 성명·학번 영역을 제외하고 점수 열만 보여줍니다. 원본 PDF는 외부로 전송되지 않습니다.</p>';
+ const crop=document.createElement("canvas");crop.width=x1-x0;crop.height=y1-y0;
+ crop.getContext("2d").drawImage(canvas,x0,y0,crop.width,crop.height,0,0,crop.width,crop.height);
+ crop.style.cssText="max-width:100%;height:auto;border:1px solid #dee8f0";box.appendChild(crop);box.scrollIntoView({behavior:"smooth"});
+ }catch(e){toast("미리보기 실패: "+e.message)}
+}
 function sgTurn(delta){if(!state.scans.length)return;state.activePage=Math.min(state.scans.length-1,Math.max(0,state.activePage+delta));$("verify-page").value=String(state.activePage);showScan()}
 function showScan(){const scan=state.scans[state.activePage];if(!scan)return;sgControlBar();$("scan-info").textContent="파일 "+(scan.sourceIndex+1)+" / PDF "+scan.page+"쪽"+(scan.readOk?" · 학생 행 "+scan.rows.length+"개 · 숫자 열 "+scan.cols.length+"개":" · 판독 실패: "+scan.readError);
  if(!scan.readOk){$("column-mapping").innerHTML='<div class="notice neutral">이 페이지의 점수를 읽지 못했습니다. 선명한 파일로 다시 스캔하거나 원본에서 직접 확인해 주세요.</div>';$("run-verification").disabled=true;return}
