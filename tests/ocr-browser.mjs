@@ -46,7 +46,7 @@ try{
  console.log("SCAN_RESULT",JSON.stringify(scan));
  const diag=await page.evaluate(()=>{const s=state.scans[0];return {xs:s.grid?.xs,ys:s.grid?.ys,cols:s.cols,rows:s.rows?.map(r=>({row:r.studentRow,entries:Object.entries(r.entries).map(([c,v])=>[c,v.value,v.raw,v.confidence])}))}});
  console.log("SCAN_DEBUG",JSON.stringify(diag));
- console.log("OCR_RUNTIME",JSON.stringify(await page.evaluate(()=>({startOffset:state.scans[0]?.startOffset,rawRows:state.scans[0]?.allRecognizedRows?.length,functions:[scanFiles.toString().slice(0,140),sg3OldScanFiles.toString().slice(0,140),sgOcrGrid.toString().slice(0,140)]}))));
+ console.log("OCR_RUNTIME",JSON.stringify(await page.evaluate(()=>({startOffset:state.scans[0]?.startOffset,densityDebug:state.scans[0]?.densityDebug,rawRows:state.scans[0]?.allRecognizedRows?.length,functions:[scanFiles.toString().slice(0,140),sg3OldScanFiles.toString().slice(0,140),sgOcrGrid.toString().slice(0,140)]}))));
  assert.equal(scan.length,1);
  assert(scan[0].readOk,"Synthetic PDF OCR should succeed: "+scan[0].err);
  assert.equal(scan[0].rows,8,"Expected exactly 8 student rows, not header/summary rows: "+scan[0].rows);
